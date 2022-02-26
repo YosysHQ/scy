@@ -1,0 +1,60 @@
+[design]
+read -sv top.sv cpu.sv mem.sv bus.sv
+prep -top top
+
+[sequence]
+depth 20
+engine btor btormc
+
+cover cp_reset_done:
+  commit reset
+
+cover cp_cpu_ar_valid_ready:
+  cover cp_mem_ar_valid_ready:
+    flow cpu.axi4lite_axi_arvalid@0 mem.axi4lite_axi_arvalid@-1
+    flow cpu.axi4lite_axi_araddr@0 mem.axi4lite_axi_araddr@-1
+    commit
+
+  cover cp_mem_r_valid_ready:
+    flow mem.axi4lite_axi_arvalid@0 mem.axi4lite_axi_rvalid@-1
+    flow mem.axi4lite_axi_araddr@0 mem.axi4lite_axi_rdata@-1
+    commit
+
+  cover cp_cpu_r_valid_ready:
+    flow mem.axi4lite_axi_rvalid@0 cpu.axi4lite_axi_rvalid@-1
+    flow mem.axi4lite_axi_rdata@0 cpu.axi4lite_axi_rdata@-1
+    commit
+
+  branch axi_ar_r
+
+cover cp_cpu_aw_valid_ready:
+  cover cp_mem_aw_valid_ready:
+    flow cpu.axi4lite_axi_awvalid@0 mem.axi4lite_axi_awvalid@-1
+    flow cpu.axi4lite_axi_awaddr@0 mem.axi4lite_axi_awaddr@-1
+    commit
+
+  cover cp_mem_b_valid_ready:
+    flow mem.axi4lite_axi_awvalid@0 mem.axi4lite_axi_bvalid@-1
+    commit
+
+  cover cp_cpu_b_valid_ready:
+    flow mem.axi4lite_axi_bvalid@0 cpu.axi4lite_axi_bvalid@-1
+    commit
+
+  branch axi_aw_b
+
+cover cp_cpu_w_valid_ready:
+  cover cp_mem_w_valid_ready:
+    flow cpu.axi4lite_axi_wvalid@0 mem.axi4lite_axi_wvalid@-1
+    flow cpu.axi4lite_axi_wdata@0 mem.axi4lite_axi_wdata@-1
+    commit
+
+  cover cp_mem_b_valid_ready:
+    flow mem.axi4lite_axi_wvalid@0 mem.axi4lite_axi_bvalid@-1
+    commit
+
+  cover cp_cpu_b_valid_ready:
+    flow mem.axi4lite_axi_bvalid@0 cpu.axi4lite_axi_bvalid@-1
+    commit
+
+  branch axi_w_b
