@@ -1,0 +1,172 @@
+(* keep *)
+module top (
+	input clock,
+	input reset
+);
+	// CPU1 AXI4-Lite Interface
+	wire        CPU1_AWVALID;
+	wire        CPU1_AWREADY;
+	wire [31:0] CPU1_AWADDR;
+	wire        CPU1_WVALID;
+	wire        CPU1_WREADY;
+	wire [31:0] CPU1_WDATA;
+	wire [ 3:0] CPU1_WSTRB;
+	wire        CPU1_BVALID;
+	wire        CPU1_BREADY;
+	wire        CPU1_ARVALID;
+	wire        CPU1_ARREADY;
+	wire [31:0] CPU1_ARADDR;
+	wire        CPU1_RVALID;
+	wire        CPU1_RREADY;
+	wire [31:0] CPU1_RDATA;
+
+	// CPU2 AXI4-Lite Interface
+	wire        CPU2_AWVALID;
+	wire        CPU2_AWREADY;
+	wire [31:0] CPU2_AWADDR;
+	wire        CPU2_WVALID;
+	wire        CPU2_WREADY;
+	wire [31:0] CPU2_WDATA;
+	wire [ 3:0] CPU2_WSTRB;
+	wire        CPU2_BVALID;
+	wire        CPU2_BREADY;
+	wire        CPU2_ARVALID;
+	wire        CPU2_ARREADY;
+	wire [31:0] CPU2_ARADDR;
+	wire        CPU2_RVALID;
+	wire        CPU2_RREADY;
+	wire [31:0] CPU2_RDATA;
+
+	// Memory AXI4-Lite Interface
+	wire        MEM_AWVALID;
+	wire        MEM_AWREADY;
+	wire [31:0] MEM_AWADDR;
+	wire        MEM_WVALID;
+	wire        MEM_WREADY;
+	wire [31:0] MEM_WDATA;
+	wire [ 3:0] MEM_WSTRB;
+	wire        MEM_BVALID;
+	wire        MEM_BREADY;
+	wire        MEM_ARVALID;
+	wire        MEM_ARREADY;
+	wire [31:0] MEM_ARADDR;
+	wire        MEM_RVALID;
+	wire        MEM_RREADY;
+	wire [31:0] MEM_RDATA;
+
+	cpu cpu1 (
+		.clock(clock),
+		.reset(reset),
+
+		.AWVALID (CPU1_AWVALID),
+		.AWREADY (CPU1_AWREADY),
+		.AWADDR  (CPU1_AWADDR ),
+		.WVALID  (CPU1_WVALID ),
+		.WREADY  (CPU1_WREADY ),
+		.WDATA   (CPU1_WDATA  ),
+		.WSTRB   (CPU1_WSTRB  ),
+		.BVALID  (CPU1_BVALID ),
+		.BREADY  (CPU1_BREADY ),
+		.ARVALID (CPU1_ARVALID),
+		.ARREADY (CPU1_ARREADY),
+		.ARADDR  (CPU1_ARADDR ),
+		.RVALID  (CPU1_RVALID ),
+		.RREADY  (CPU1_RREADY ),
+		.RDATA   (CPU1_RDATA  )
+	);
+
+	cpu cpu2 (
+		.clock(clock),
+		.reset(reset),
+
+		.AWVALID (CPU2_AWVALID),
+		.AWREADY (CPU2_AWREADY),
+		.AWADDR  (CPU2_AWADDR ),
+		.WVALID  (CPU2_WVALID ),
+		.WREADY  (CPU2_WREADY ),
+		.WDATA   (CPU2_WDATA  ),
+		.WSTRB   (CPU2_WSTRB  ),
+		.BVALID  (CPU2_BVALID ),
+		.BREADY  (CPU2_BREADY ),
+		.ARVALID (CPU2_ARVALID),
+		.ARREADY (CPU2_ARREADY),
+		.ARADDR  (CPU2_ARADDR ),
+		.RVALID  (CPU2_RVALID ),
+		.RREADY  (CPU2_RREADY ),
+		.RDATA   (CPU2_RDATA  )
+	);
+
+	mem mem (
+		.clock(clock),
+		.reset(reset),
+
+		.AWVALID (MEM_AWVALID),
+		.AWREADY (MEM_AWREADY),
+		.AWADDR  (MEM_AWADDR ),
+		.WVALID  (MEM_WVALID ),
+		.WREADY  (MEM_WREADY ),
+		.WDATA   (MEM_WDATA  ),
+		.WSTRB   (MEM_WSTRB  ),
+		.BVALID  (MEM_BVALID ),
+		.BREADY  (MEM_BREADY ),
+		.ARVALID (MEM_ARVALID),
+		.ARREADY (MEM_ARREADY),
+		.ARADDR  (MEM_ARADDR ),
+		.RVALID  (MEM_RVALID ),
+		.RREADY  (MEM_RREADY ),
+		.RDATA   (MEM_RDATA  )
+	);
+
+	bus bus (
+		.clock(clock),
+		.reset(reset),
+
+		.CPU1_AWVALID (CPU1_AWVALID),
+		.CPU1_AWREADY (CPU1_AWREADY),
+		.CPU1_AWADDR  (CPU1_AWADDR ),
+		.CPU1_WVALID  (CPU1_WVALID ),
+		.CPU1_WREADY  (CPU1_WREADY ),
+		.CPU1_WDATA   (CPU1_WDATA  ),
+		.CPU1_WSTRB   (CPU1_WSTRB  ),
+		.CPU1_BVALID  (CPU1_BVALID ),
+		.CPU1_BREADY  (CPU1_BREADY ),
+		.CPU1_ARVALID (CPU1_ARVALID),
+		.CPU1_ARREADY (CPU1_ARREADY),
+		.CPU1_ARADDR  (CPU1_ARADDR ),
+		.CPU1_RVALID  (CPU1_RVALID ),
+		.CPU1_RREADY  (CPU1_RREADY ),
+		.CPU1_RDATA   (CPU1_RDATA  ),
+
+		.CPU2_AWVALID (CPU2_AWVALID),
+		.CPU2_AWREADY (CPU2_AWREADY),
+		.CPU2_AWADDR  (CPU2_AWADDR ),
+		.CPU2_WVALID  (CPU2_WVALID ),
+		.CPU2_WREADY  (CPU2_WREADY ),
+		.CPU2_WDATA   (CPU2_WDATA  ),
+		.CPU2_WSTRB   (CPU2_WSTRB  ),
+		.CPU2_BVALID  (CPU2_BVALID ),
+		.CPU2_BREADY  (CPU2_BREADY ),
+		.CPU2_ARVALID (CPU2_ARVALID),
+		.CPU2_ARREADY (CPU2_ARREADY),
+		.CPU2_ARADDR  (CPU2_ARADDR ),
+		.CPU2_RVALID  (CPU2_RVALID ),
+		.CPU2_RREADY  (CPU2_RREADY ),
+		.CPU2_RDATA   (CPU2_RDATA  ),
+
+		.MEM_AWVALID (MEM_AWVALID),
+		.MEM_AWREADY (MEM_AWREADY),
+		.MEM_AWADDR  (MEM_AWADDR ),
+		.MEM_WVALID  (MEM_WVALID ),
+		.MEM_WREADY  (MEM_WREADY ),
+		.MEM_WDATA   (MEM_WDATA  ),
+		.MEM_WSTRB   (MEM_WSTRB  ),
+		.MEM_BVALID  (MEM_BVALID ),
+		.MEM_BREADY  (MEM_BREADY ),
+		.MEM_ARVALID (MEM_ARVALID),
+		.MEM_ARREADY (MEM_ARREADY),
+		.MEM_ARADDR  (MEM_ARADDR ),
+		.MEM_RVALID  (MEM_RVALID ),
+		.MEM_RREADY  (MEM_RREADY ),
+		.MEM_RDATA   (MEM_RDATA  )
+	);
+endmodule
