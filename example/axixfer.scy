@@ -1,5 +1,5 @@
 [design]
-read -sv top.sv cpu.sv mem.sv bus.sv
+read -sv top.sv cpu.sv mem.sv bus.sv fifo.sv
 prep -top top
 
 [sequence]

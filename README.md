@@ -15,7 +15,7 @@ and the individual steps to cover. For example [`example/axixfer.scy`](example/a
 
 ```
 [design]
-read -sv top.sv cpu.sv mem.sv bus.sv
+read -sv top.sv cpu.sv mem.sv bus.sv fifo.sv
 prep -top top
 
 [sequence]
