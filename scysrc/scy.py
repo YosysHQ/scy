@@ -31,12 +31,12 @@ scyfile = args.scyfile
 with open(scyfile, 'r') as f:
     scydata = f.read()
 
-regex = r"(?:^|\n)\[(?P<name>.*)\]\n(?P<body>(?:\n?.*)*?(?=\n\[|$))"
-sections = re.finditer(regex, scydata)
-sectDict = { m['name']:m['body'].split('\n') for m in sections }
+stmt_regex = r"(?:^|\n)\[(?P<name>.*)\]\n(?P<body>(?:\n?.*)*?(?=\n\[|$))"
+sections = re.finditer(stmt_regex, scydata)
+sectDict = { m['name']:m['body'] for m in sections }
 
 start_index = scydata.split('\n').index("[sequence]") + 2
-task_tree = TaskTree.from_sequence(sectDict["sequence"], L0 = start_index)
+task_tree = TaskTree.from_string(sectDict["sequence"], L0 = start_index)
 
 if args.dump_tree:
     print(task_tree)
