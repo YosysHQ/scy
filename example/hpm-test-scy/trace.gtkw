@@ -1,0 +1,33 @@
+[*]
+[*] GTKWave Analyzer v3.3.103 (w)1999-2019 BSI
+[*] Wed May 10 23:43:13 2023
+[*]
+[timestart] 0
+[size] 1908 999
+[pos] -2062 -86
+*-3.240500 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1 -1
+[treeopen] rvfi_testbench.
+[sst_width] 347
+[signals_width] 294
+[sst_expanded] 1
+[sst_vpaned_height] 292
+@22
+rvfi_testbench.cycle_reg[7:0]
+@28
+rvfi_testbench.reset
+@22
+rvfi_testbench.rvfi_csr_mhpmcounter3_rdata[63:0]
+rvfi_testbench.rvfi_csr_mhpmcounter3_wdata[63:0]
+rvfi_testbench.rvfi_csr_mhpmevent3_rdata[31:0]
+rvfi_testbench.rvfi_csr_mhpmevent3_wdata[31:0]
+@28
+rvfi_testbench.checker_inst.csr_read_valid
+rvfi_testbench.checker_inst.csr_write_valid
+@22
+rvfi_testbench.checker_inst.csr_insn_addr[11:0]
+rvfi_testbench.checker_inst.csr_hpmevent_written[31:0]
+rvfi_testbench.checker_inst.csr_hpmcounter_shadow[31:0]
+@29
+rvfi_testbench.checker_inst.csr_hpmcounter_shadowed
+[pattern_trace] 1
+[pattern_trace] 0

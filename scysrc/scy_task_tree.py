@@ -1,4 +1,5 @@
 import re
+from typing import Iterable
 
 def from_string(string: str, L0: int = 0) -> "TaskTree | None":
     stmt_regex = r"^\s*(?P<stmt>cover) (?P<name>\S+?):?\n(?P<body>.*)"
@@ -56,10 +57,19 @@ class TaskTree:
     
     def is_leaf(self):
         return not self.children
+    
+    def get_linestr(self):
+        return f"L{self.line:03d}_{0 if self.is_root() else self.parent.line:03d}"
+
+    def traverse(self, include_self = True) -> Iterable["TaskTree"]:
+        if include_self:
+            yield self
+        for child in self.children:
+            for task in child.traverse():
+                yield task
 
     def __str__(self):
-        linestr = f"L{self.line:03d}_{0 if self.is_root() else self.parent.line:03d}"
-        strings: list[str] = [f"{linestr} => {self.steps} {self.name}"]
+        strings: list[str] = [f"{self.get_linestr} => {self.steps} {self.name}"]
         if self.body:
             strings += self.body.split('\n')[:-1]
         for child in self.children:
