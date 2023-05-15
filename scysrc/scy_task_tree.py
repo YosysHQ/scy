@@ -36,7 +36,7 @@ def from_sequence(seq: "list[str]", L0: int = 0) -> "TaskTree":
 class TaskTree:
     def __init__(self, name: str, line: int, steps: int = -1, 
                  parent: "TaskTree" = None, children: "list[TaskTree]" = None,
-                 body: str = ""):
+                 body: str = "", traces: "list[str]" = None):
         self.name = name
         self.line = line
         self.steps = steps
@@ -46,6 +46,10 @@ class TaskTree:
         else:
             self.children = []
         self.body = body
+        if traces:
+            self.traces = traces
+        else:
+            self.traces = []
 
     def add_child(self, child: "TaskTree"):
         child.parent = self
@@ -57,6 +61,9 @@ class TaskTree:
     
     def is_leaf(self):
         return not self.children
+    
+    def get_tracestr(self):
+        return f"trace{self.line:03d}.yw"
     
     def get_linestr(self):
         return f"L{self.line:03d}_{0 if self.is_root() else self.parent.line:03d}"

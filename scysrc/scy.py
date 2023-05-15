@@ -1,5 +1,6 @@
 import os, sys, re
 import argparse
+import shutil
 import subprocess
 from scy_task_tree import TaskTree
 
@@ -41,16 +42,25 @@ scycfg = { m['name']:m['body'] for m in sections }
 start_index = scydata.split('\n').index("[sequence]") + 2
 task_tree = TaskTree.from_string(scycfg["sequence"], L0 = start_index)
 
+# hacky workaround testing
+task_list = []
+for task in task_tree.traverse():
+    task_list.append(task.name)
+
 if args.dump_tree:
     print(task_tree)
     sys.exit(0)
 
 # generate workdir
 try:
-    os.makedirs(workdir, exist_ok=args.force)
+    os.makedirs(workdir)
 except FileExistsError:
-    print(f"ERROR: Directory '{workdir}' already exists, use -f to overwrite the existing directory.")
-    sys.exit(1)
+    if args.force:
+        shutil.rmtree(workdir, ignore_errors=True)
+        os.makedirs(workdir)
+    else:
+        print(f"ERROR: Directory '{workdir}' already exists, use -f to overwrite the existing directory.")
+        sys.exit(1)
 
 # generate sby files
 # default assignments
@@ -92,26 +102,50 @@ for task in task_tree.traverse():
     print(f"Generating {task_sby}")
     with open(task_sby, 'w') as sbyfile:
         for (name, body) in sbycfg.items():
-            if not task.is_root():
+            if task.is_root():
+                # root node handles il generation
+                if name == "script":
+                    body += '\n'.join(["setundef -zero",
+                                       "write_rtlil common_design.il",
+                                       ""])
+                pass
+            else:
                 # child nodes depend on parent
                 parent = task.parent
                 parent_dir = f"{parent.get_linestr()}_{parent.name}"
                 make_deps[task_dir] = parent_dir
                 if name == "script":
-                    # load parent trace
-                    body += '\n'.join(["setundef -zero",
-                                      "sim -w -r trace0.yw",
+                    # replace with loading parent design
+                    body = '\n'.join(["read_rtlil common_design.il",
                                       ""])
                 elif name == "files":
                     parent_yw = os.path.join(parent_dir,
                                              "engine_0",
                                              "trace0.yw")
-                    body += f"\n{parent_yw}\n"
+                    parent_il = os.path.join(parent_dir,
+                                             "src",
+                                             "common_design.il")
+                    traces = [os.path.join(parent_dir,
+                                           "src", 
+                                           trace) for trace in task.traces[:-1]]
+                    body = '\n'.join(traces + [f"{task.parent.get_tracestr()} {parent_yw}",
+                                               parent_il,
+                                               ""])
+                elif "file" in name:
+                    continue
             if name == "script":
-                # enable only relevant cover
-                body += f"\ndelete t:$cover a:hdlname=*{task.name} %d\n"
+                # replay prior traces and enable only relevant cover
+                traces_script = []
+                for trace in task.traces:
+                    traces_script += [f"sim -w -r {trace}"]
+                body += '\n'.join(traces_script
+                                  + [f"delete t:$cover a:hdlname=*{task.name} %d", 
+                                     ""])
             print(f"[{name}]", file=sbyfile)
             print(body, file=sbyfile)
+    # add this trace to child
+    for child in task.children:
+        child.traces += task.traces + [task.get_tracestr()]
 
 # generate makefile
 makefile = os.path.join(workdir, "Makefile")
