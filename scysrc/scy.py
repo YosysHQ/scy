@@ -1,5 +1,6 @@
 import os, sys, re
 import argparse
+import json
 import shutil
 import subprocess
 from scy_task_tree import TaskTree
@@ -18,6 +19,8 @@ parser.add_argument("-j", metavar="<N>", type=int, dest="jobcount",
 
 parser.add_argument("--dumptree", action="store_true", dest="dump_tree",
         help="print the task tree and exit")
+parser.add_argument("--dumpcommon", action="store_true", dest="dump_common",
+        help="prepare common input and exit")
 parser.add_argument("--setup", action="store_true", dest="setupmode",
         help="set up the working directory and exit")
 
@@ -42,11 +45,6 @@ scycfg = { m['name']:m['body'] for m in sections }
 start_index = scydata.split('\n').index("[sequence]") + 2
 task_tree = TaskTree.from_string(scycfg["sequence"], L0 = start_index)
 
-# hacky workaround testing
-task_list = []
-for task in task_tree.traverse():
-    task_list.append(task.name)
-
 if args.dump_tree:
     print(task_tree)
     sys.exit(0)
@@ -63,6 +61,19 @@ except FileExistsError:
         sys.exit(1)
 
 # generate sby files
+def sby_body_append(body: str, append: "str | list[str]"):
+    if len(body) > 1:
+        if body[-1] != '\n':
+            body += '\n'
+        elif body[-2] == '\n':
+            body = body[:-1]
+    if isinstance(append, str):
+        append = [append]
+    elif append and append[-1]:
+        append.append("")
+    body += '\n'.join(append)
+    return body
+
 # default assignments
 sbycfg = {"engines": "smtbmc boolector", 
           "files": ""}
@@ -73,10 +84,6 @@ for (name, body) in scycfg.items():
     elif name == "options": 
         # remove any scy specific options
         pass
-        # add extra options
-        body += "\n".join(["mode cover", 
-                           "expect pass", 
-                           ""])
     elif name == "design":
         # rename design to script
         name = "script"
@@ -91,6 +98,46 @@ for (name, body) in scycfg.items():
         body = newbody
     sbycfg[name] = body
 
+# use sby to prepare input
+print(f"Preparing input files")
+task_sby = os.path.join(f"{workdir}", 
+                        f"common.sby")
+with open(task_sby, 'w') as sbyfile:
+    for (name, body) in sbycfg.items():
+        if name in "engines":
+            continue
+        elif name == "options":
+            body = sby_body_append(body, "mode prep")
+        print(f"[{name}]", file=sbyfile)
+        print(body, file=sbyfile)
+retcode = 0
+sby_args = ["sby", "common.sby"]
+print(f"Running {' '.join(sby_args)}")
+p = subprocess.run(sby_args, cwd=workdir, capture_output=True)
+retcode = p.returncode
+
+if args.dump_common or retcode:
+    sys.exit(retcode)
+
+# load top level design name back from generated model
+design_json = os.path.join(workdir, "common", "model", "design.json")
+with open(design_json, 'r') as f:
+    design = json.load(f)
+
+assert len(design["modules"]) == 1, "expected one top level module"
+design_scope = design["modules"][0]["name"]
+
+# modify config for full sby runs
+sbycfg["options"] = sby_body_append(
+        sbycfg["options"], ["mode cover", 
+                            "expect pass",
+                            "skip_prep on"])
+sbycfg["script"] = sby_body_append("", ["read_rtlil common_design.il"])
+sbycfg["files"] = sby_body_append("", [f"common_design.il {os.path.join('common', 'model', 'design_prep.il')}"])
+for key in list(sbycfg.keys()):
+    if "file " in key:
+        sbycfg.pop(key)
+
 make_all = []
 make_deps = {}
 for task in task_tree.traverse():
@@ -102,45 +149,27 @@ for task in task_tree.traverse():
     print(f"Generating {task_sby}")
     with open(task_sby, 'w') as sbyfile:
         for (name, body) in sbycfg.items():
-            if task.is_root():
-                # root node handles il generation
-                if name == "script":
-                    body += '\n'.join(["setundef -zero",
-                                       "write_rtlil common_design.il",
-                                       ""])
-                pass
-            else:
+            if not task.is_root():
                 # child nodes depend on parent
                 parent = task.parent
                 parent_dir = f"{parent.get_linestr()}_{parent.name}"
                 make_deps[task_dir] = parent_dir
-                if name == "script":
-                    # replace with loading parent design
-                    body = '\n'.join(["read_rtlil common_design.il",
-                                      ""])
-                elif name == "files":
+                if name == "files":
                     parent_yw = os.path.join(parent_dir,
                                              "engine_0",
-                                             "trace0.yw")
-                    parent_il = os.path.join(parent_dir,
-                                             "src",
-                                             "common_design.il")
+                                             "trace0.vcd")
                     traces = [os.path.join(parent_dir,
                                            "src", 
                                            trace) for trace in task.traces[:-1]]
-                    body = '\n'.join(traces + [f"{task.parent.get_tracestr()} {parent_yw}",
-                                               parent_il,
-                                               ""])
-                elif "file" in name:
-                    continue
+                    body = sby_body_append(body, 
+                                           traces + [f"{task.parent.get_tracestr()} {parent_yw}"])
             if name == "script":
                 # replay prior traces and enable only relevant cover
                 traces_script = []
                 for trace in task.traces:
-                    traces_script += [f"sim -w -r {trace}"]
-                body += '\n'.join(traces_script
-                                  + [f"delete t:$cover a:hdlname=*{task.name} %d", 
-                                     ""])
+                    traces_script += [f"sim -w -r {trace} -scope {design_scope}"]
+                body = sby_body_append(body, 
+                                       traces_script + [f"delete t:$cover a:hdlname=*{task.name} %d"])
             print(f"[{name}]", file=sbyfile)
             print(body, file=sbyfile)
     # add this trace to child
