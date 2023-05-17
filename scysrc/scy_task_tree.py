@@ -1,19 +1,19 @@
 import re
 from typing import Iterable
 
-def from_string(string: str, L0: int = 0) -> "TaskTree | None":
+def from_string(string: str, L0: int = 0, depth: int = 0) -> "TaskTree | None":
     stmt_regex = r"^\s*(?P<stmt>cover) (?P<name>\S+?):?\n(?P<body>.*)"
     m = re.search(stmt_regex, string, flags=re.DOTALL)
     if not m: # no statement
         return None
 
-    root = TaskTree(name=m.group('name'), line=L0)
+    root = TaskTree(name=m.group('name'), line=L0, depth=depth)
     line = L0 + 1
 
     body_str = m.group('body')
     body_regex = r"(?P<ws>\s+).*?\n(?=(?P=ws)\S|$)"
     for m in re.finditer(body_regex, body_str, flags=re.DOTALL):
-        child = from_string(m.group(0), line)
+        child = from_string(m.group(0), line, depth+1)
         if child:
             root.add_child(child)
         else:
@@ -34,12 +34,13 @@ def from_sequence(seq: "list[str]", L0: int = 0) -> "TaskTree":
     return root
 
 class TaskTree:
-    def __init__(self, name: str, line: int, steps: int = -1, 
+    def __init__(self, name: str, line: int, steps: int = -1, depth: int = 0,
                  parent: "TaskTree" = None, children: "list[TaskTree]" = None,
                  body: str = "", traces: "list[str]" = None):
         self.name = name
         self.line = line
         self.steps = steps
+        self.depth = depth
         self.parent = parent
         if children:
             self.children = children
@@ -67,6 +68,15 @@ class TaskTree:
     
     def get_linestr(self):
         return f"L{self.line:03d}_{0 if self.is_root() else self.parent.line:03d}"
+    
+    def start_cycle(self) -> int:
+        if self.is_root():
+            return 0
+        else:
+            return self.parent.stop_cycle()
+
+    def stop_cycle(self) -> int:
+        return self.start_cycle() + self.steps -1 
 
     def traverse(self, include_self = True) -> Iterable["TaskTree"]:
         if include_self:
@@ -76,7 +86,7 @@ class TaskTree:
                 yield task
 
     def __str__(self):
-        strings: list[str] = [f"{self.get_linestr} => {self.steps} {self.name}"]
+        strings: list[str] = [f"{self.get_linestr()} => {self.steps} {self.name}"]
         if self.body:
             strings += self.body.split('\n')[:-1]
         for child in self.children:
