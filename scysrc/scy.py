@@ -112,7 +112,7 @@ with open(task_sby, 'w') as sbyfile:
         print(body, file=sbyfile)
 retcode = 0
 sby_args = ["sby", "common.sby"]
-print(f"Running {' '.join(sby_args)}")
+print(f'Running "{" ".join(sby_args)}"')
 p = subprocess.run(sby_args, cwd=workdir, capture_output=True)
 retcode = p.returncode
 
@@ -196,12 +196,29 @@ make_args = ["make"]
 if args.jobcount:
     make_args.append(f"-j{args.jobcount}")
 make_args += ["-C", workdir]
-print(f"Running {' '.join(make_args)}")
+print(f'Running "{" ".join(make_args)}"')
 p = subprocess.run(make_args, capture_output=True)
 retcode = p.returncode
+make_log = str(p.stdout, encoding="utf-8")
+
+with open(makefile + ".log", 'w') as f:
+    print(make_log, file=f)
+
+if retcode:
+    print("Something went wrong!")
+    p.check_returncode()
 
 # parse sby runs
+log_regex = r"^.*\[(?P<task>.*)\].*(?:reached).*step (?P<step>\d+)$"
+log_matches = re.finditer(log_regex, make_log, flags=re.MULTILINE)
+task_steps = {m['task']:int(m['step']) for m in log_matches}
 
 # output stats
+print("Chunks:")
+for task in task_tree.traverse():
+    task.steps = task_steps[f"{task.get_linestr()}_{task.name}"]
+    chunk_str = " "*task.depth + f"L{task.line}"
+    cycles_str = f"{task.start_cycle():2} .. {task.stop_cycle():2}"
+    print(f"  {chunk_str:6}  {cycles_str}  =>  {task.steps:2}  {task.name}")
 
 sys.exit(retcode)
