@@ -70,10 +70,7 @@ class TaskTree:
 
     def stop_cycle(self) -> int:
         start = self.start_cycle()
-        if start:
-            return start + self.steps
-        else:
-            return start + self.steps - 1
+        return start + self.steps
 
     def traverse(self, include_self = True) -> Iterable["TaskTree"]:
         if include_self:
