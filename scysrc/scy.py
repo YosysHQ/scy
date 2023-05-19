@@ -152,42 +152,54 @@ for key in list(sbycfg.keys()):
 
 make_all = []
 make_deps = {}
+task_steps = {}
 for task in task_tree.traverse():
     # each task has its own sby file
-    task_dir = f"{task.get_linestr()}_{task.name}"
-    make_all.append(task_dir)
-    task_sby = os.path.join(f"{workdir}", 
-                            f"{task_dir}.sby")
-    print(f"Generating {task_sby}")
-    with open(task_sby, 'w') as sbyfile:
-        for (name, body) in sbycfg.items():
-            if not task.is_root():
-                # child nodes depend on parent
-                parent = task.parent
-                parent_dir = f"{parent.get_linestr()}_{parent.name}"
-                make_deps[task_dir] = parent_dir
-                if name == "files":
-                    parent_yw = os.path.join(parent_dir,
-                                             "engine_0",
-                                             f"trace0.{trace_ext}")
-                    traces = [os.path.join(parent_dir,
-                                           "src", 
-                                           trace) for trace in task.traces[:-1]]
-                    body = sby_body_append(body, 
-                                           traces + [f"{task.parent.get_tracestr()}.{trace_ext} {parent_yw}"])
-            if name == "script":
-                # replay prior traces and enable only relevant cover
-                traces_script = []
-                for trace in task.traces:
-                    trace_scope = f" -scope {design_scope}" if opt_replay_vcd else ""
-                    traces_script += [f"sim -w -r {trace}{trace_scope}"]
-                body = sby_body_append(body, 
-                                       traces_script + [f"delete t:$cover a:hdlname=*{task.name} %d"])
-            print(f"[{name}]", file=sbyfile)
-            print(body, file=sbyfile)
-    # add this trace to child
-    for child in task.children:
-        child.traces += task.traces + [f"{task.get_tracestr()}.{trace_ext}"]
+    if task.is_runnable():
+        task_dir = f"{task.get_linestr()}_{task.name}"
+        make_all.append(task_dir)
+        task_sby = os.path.join(f"{workdir}", 
+                                f"{task_dir}.sby")
+        print(f"Generating {task_sby}")
+        with open(task_sby, 'w') as sbyfile:
+            for (name, body) in sbycfg.items():
+                if not task.is_root():
+                    # child nodes depend on parent
+                    parent = task.parent
+                    pseudo_parent = parent if parent.is_runnable() else parent.parent
+                    parent_dir = f"{pseudo_parent.get_linestr()}_{pseudo_parent.name}"
+                    make_deps[task_dir] = parent_dir
+                    if name == "files":
+                        parent_yw = os.path.join(parent_dir,
+                                                "engine_0",
+                                                f"trace0.{trace_ext}")
+                        traces = [os.path.join(parent_dir,
+                                            "src", 
+                                            trace.split()[0]) for trace in task.traces[:-1]]
+                        body = sby_body_append(body, 
+                                            traces + [f"{pseudo_parent.get_tracestr()}.{trace_ext} {parent_yw}"])
+                if name == "script":
+                    # replay prior traces and enable only relevant cover
+                    traces_script = []
+                    for trace in task.traces:
+                        trace_scope = f" -scope {design_scope}" if opt_replay_vcd else ""
+                        traces_script += [f"sim -w -r {trace}{trace_scope}"]
+                    if task.stmt == "cover":
+                        body = sby_body_append(body, 
+                                            traces_script + [f"delete t:$cover a:hdlname=*{task.name} %d"])
+                    else:
+                        raise NotImplementedError(task.stmt)
+                print(f"[{name}]", file=sbyfile)
+                print(body, file=sbyfile)
+        # add this trace to child
+        for child in task.children:
+            child.traces += task.traces + [f"{task.get_tracestr()}.{trace_ext}"]
+    elif task.stmt == "append":
+        assert not opt_replay_vcd
+        task.traces[-1] += f" -append {int(task.name):d}"
+        task_steps[f"{task.get_linestr()}_{task.name}"] = int(task.name)
+        for child in task.children:
+            child.traces += task.traces
 
 # generate makefile
 makefile = os.path.join(workdir, "Makefile")
@@ -224,7 +236,7 @@ if retcode:
 # parse sby runs
 log_regex = r"^.*\[(?P<task>.*)\].*(?:reached).*step (?P<step>\d+)$"
 log_matches = re.finditer(log_regex, make_log, flags=re.MULTILINE)
-task_steps = {m['task']:int(m['step']) for m in log_matches}
+task_steps.update({m['task']:int(m['step']) for m in log_matches})
 
 # output stats
 print("Chunks:")
@@ -232,6 +244,7 @@ for task in task_tree.traverse():
     task.steps = task_steps[f"{task.get_linestr()}_{task.name}"]
     chunk_str = " "*task.depth + f"L{task.line}"
     cycles_str = f"{task.start_cycle():2} .. {task.stop_cycle():2}"
-    print(f"  {chunk_str:6}  {cycles_str}  =>  {task.steps:2}  {task.name}")
+    task_str = task.name if task.is_runnable() else f"{task.stmt} {task.name}"
+    print(f"  {chunk_str:6}  {cycles_str}  =>  {task.steps:2}  {task_str}")
 
 sys.exit(retcode)

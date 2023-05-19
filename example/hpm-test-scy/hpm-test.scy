@@ -11,11 +11,14 @@ replay_vcd off
 
 [sequence]
 cover cp_reset_done:
-    cover cp_hpmevent2:
-        cover cp_hpmcounter
+    append 1:
+        cover cp_hpmevent2:
+            cover cp_hpmcounter
 
     cover cp_hpmevent3:
         cover cp_hpmcounter
+        append -1:
+            cover cp_hpmcounter
 
 [files]
 ../../../riscv-formal/checks/rvfi_macros.vh

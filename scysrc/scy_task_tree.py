@@ -2,12 +2,12 @@ import re
 from typing import Iterable
 
 def from_string(string: str, L0: int = 0, depth: int = 0) -> "TaskTree | None":
-    stmt_regex = r"^\s*(?P<stmt>cover) (?P<name>\S+?):?\n(?P<body>.*)"
+    stmt_regex = r"^\s*(?P<stmt>cover|append) (?P<name>\S+?):?\n(?P<body>.*)"
     m = re.search(stmt_regex, string, flags=re.DOTALL)
     if not m: # no statement
         return None
 
-    root = TaskTree(name=m.group('name'), line=L0, depth=depth)
+    root = TaskTree(name=m.group('name'), stmt=m.group('stmt'), line=L0, depth=depth)
     line = L0 + 1
 
     body_str = m.group('body')
@@ -22,22 +22,12 @@ def from_string(string: str, L0: int = 0, depth: int = 0) -> "TaskTree | None":
 
     return root
 
-def from_sequence(seq: "list[str]", L0: int = 0) -> "TaskTree":
-    root = None
-    for i in range(len(seq)):
-        if "cover" in seq[i]:
-            if root:
-                return root.add_child(TaskTree.from_sequence(seq[i:], L0+i))
-            root = TaskTree(name=seq[0].strip(": "), line=L0+i)
-        elif root and seq[i]:
-            root.body += f"{seq[i]}\n"
-    return root
-
 class TaskTree:
-    def __init__(self, name: str, line: int, steps: int = -1, depth: int = 0,
+    def __init__(self, name: str, stmt: str, line: int, steps: int = -1, depth: int = 0,
                  parent: "TaskTree" = None, children: "list[TaskTree]" = None,
                  body: str = "", traces: "list[str]" = None):
         self.name = name
+        self.stmt = stmt
         self.line = line
         self.steps = steps
         self.depth = depth
@@ -63,6 +53,9 @@ class TaskTree:
     def is_leaf(self):
         return not self.children
     
+    def is_runnable(self):
+        return self.stmt in ["cover"]
+    
     def get_tracestr(self):
         return f"trace{self.line:03d}"
     
@@ -76,7 +69,11 @@ class TaskTree:
             return self.parent.stop_cycle()
 
     def stop_cycle(self) -> int:
-        return self.start_cycle() + self.steps -1 
+        start = self.start_cycle()
+        if start:
+            return start + self.steps
+        else:
+            return start + self.steps - 1
 
     def traverse(self, include_self = True) -> Iterable["TaskTree"]:
         if include_self:
@@ -86,12 +83,11 @@ class TaskTree:
                 yield task
 
     def __str__(self):
-        strings: list[str] = [f"{self.get_linestr()} => {self.steps} {self.name}"]
+        strings: list[str] = [f"{self.get_linestr()} => {self.stmt} {self.name}"]
         if self.body:
             strings += self.body.split('\n')[:-1]
         for child in self.children:
             strings += str(child).split('\n')
         return "\n ".join(strings)
     
-    from_sequence = staticmethod(from_sequence)
     from_string = staticmethod(from_string)
