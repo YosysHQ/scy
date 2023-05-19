@@ -64,7 +64,7 @@ class TaskTree:
         return not self.children
     
     def get_tracestr(self):
-        return f"trace{self.line:03d}.vcd"
+        return f"trace{self.line:03d}"
     
     def get_linestr(self):
         return f"L{self.line:03d}_{0 if self.is_root() else self.parent.line:03d}"

@@ -30,11 +30,11 @@ parser.add_argument('scyfile', metavar="<jobname>.scy",
 args = parser.parse_args()
 scyfile = args.scyfile
 workdir = args.workdir
+opt_replay_vcd = False
 if workdir is None:
     workdir = scyfile.split('.')[0]
 
 # parse scy file
-
 with open(scyfile, 'r') as f:
     scydata = f.read()
 
@@ -83,7 +83,15 @@ for (name, body) in scycfg.items():
         continue
     elif name == "options": 
         # remove any scy specific options
-        pass
+        newbody = ""
+        for line in body.split('\n'):
+            if line:
+                key, val = line.split(maxsplit=1)
+                if key == "replay_vcd":
+                    opt_replay_vcd = val == "on"
+                else:
+                    newbody += line + '\n'
+        body = newbody
     elif name == "design":
         # rename design to script
         name = "script"
@@ -119,13 +127,17 @@ retcode = p.returncode
 if args.dump_common or retcode:
     sys.exit(retcode)
 
-# load top level design name back from generated model
-design_json = os.path.join(workdir, "common", "model", "design.json")
-with open(design_json, 'r') as f:
-    design = json.load(f)
+if opt_replay_vcd:
+    # load top level design name back from generated model
+    design_json = os.path.join(workdir, "common", "model", "design.json")
+    with open(design_json, 'r') as f:
+        design = json.load(f)
 
-assert len(design["modules"]) == 1, "expected one top level module"
-design_scope = design["modules"][0]["name"]
+    assert len(design["modules"]) == 1, "expected one top level module"
+    design_scope = design["modules"][0]["name"]
+    trace_ext = "vcd"
+else:
+    trace_ext = "yw"
 
 # modify config for full sby runs
 sbycfg["options"] = sby_body_append(
@@ -157,24 +169,25 @@ for task in task_tree.traverse():
                 if name == "files":
                     parent_yw = os.path.join(parent_dir,
                                              "engine_0",
-                                             "trace0.vcd")
+                                             f"trace0.{trace_ext}")
                     traces = [os.path.join(parent_dir,
                                            "src", 
                                            trace) for trace in task.traces[:-1]]
                     body = sby_body_append(body, 
-                                           traces + [f"{task.parent.get_tracestr()} {parent_yw}"])
+                                           traces + [f"{task.parent.get_tracestr()}.{trace_ext} {parent_yw}"])
             if name == "script":
                 # replay prior traces and enable only relevant cover
                 traces_script = []
                 for trace in task.traces:
-                    traces_script += [f"sim -w -r {trace} -scope {design_scope}"]
+                    trace_scope = f" -scope {design_scope}" if opt_replay_vcd else ""
+                    traces_script += [f"sim -w -r {trace}{trace_scope}"]
                 body = sby_body_append(body, 
                                        traces_script + [f"delete t:$cover a:hdlname=*{task.name} %d"])
             print(f"[{name}]", file=sbyfile)
             print(body, file=sbyfile)
     # add this trace to child
     for child in task.children:
-        child.traces += task.traces + [task.get_tracestr()]
+        child.traces += task.traces + [f"{task.get_tracestr()}.{trace_ext}"]
 
 # generate makefile
 makefile = os.path.join(workdir, "Makefile")
