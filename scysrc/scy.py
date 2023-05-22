@@ -145,7 +145,8 @@ sbycfg["options"] = sby_body_append(
                             "expect pass",
                             "skip_prep on"])
 sbycfg["script"] = sby_body_append("", ["read_rtlil common_design.il"])
-sbycfg["files"] = sby_body_append("", [f"common_design.il {os.path.join('common', 'model', 'design_prep.il')}"])
+common_il = os.path.join('common', 'model', 'design_prep.il')
+sbycfg["files"] = sby_body_append("", [f"common_design.il {common_il}"])
 for key in list(sbycfg.keys()):
     if "file " in key:
         sbycfg.pop(key)
@@ -166,8 +167,7 @@ for task in task_tree.traverse():
                 if not task.is_root():
                     # child nodes depend on parent
                     parent = task.parent
-                    pseudo_parent = parent if parent.is_runnable() else parent.parent
-                    parent_dir = f"{pseudo_parent.get_linestr()}_{pseudo_parent.name}"
+                    parent_dir = task.parent.get_dir()
                     make_deps[task_dir] = parent_dir
                     if name == "files":
                         parent_yw = os.path.join(parent_dir,
@@ -177,7 +177,7 @@ for task in task_tree.traverse():
                                             "src", 
                                             trace.split()[0]) for trace in task.traces[:-1]]
                         body = sby_body_append(body, 
-                                            traces + [f"{pseudo_parent.get_tracestr()}.{trace_ext} {parent_yw}"])
+                                            traces + [f"{parent.get_tracestr()}.{trace_ext} {parent_yw}"])
                 if name == "script":
                     # replay prior traces and enable only relevant cover
                     traces_script = []
@@ -195,20 +195,60 @@ for task in task_tree.traverse():
         for child in task.children:
             child.traces += task.traces + [f"{task.get_tracestr()}.{trace_ext}"]
     elif task.stmt == "append":
-        assert not opt_replay_vcd
+        if opt_replay_vcd:
+            raise NotImplementedError(f"replay_vcd option with append statement on line {task.line}")
         task.traces[-1] += f" -append {int(task.name):d}"
         task_steps[f"{task.get_linestr()}_{task.name}"] = int(task.name)
         for child in task.children:
             child.traces += task.traces
+    elif task.stmt == "trace":
+        if opt_replay_vcd:
+            raise NotImplementedError(f"replay_vcd option with trace statement on line {task.line}")
+        if not task.is_leaf():
+            raise NotImplementedError(f"trace statement has children on line {task.line}")
+        if task.is_root():
+            raise NotImplementedError(f"trace statement is root on line {task.line}")
+
+        trace_list = [f"{task.name}.{ext}" for ext in ["yw", "vcd"]]
+        make_all += trace_list
+        
+        parent_dir = task.parent.get_dir()
+        # reversing trace order means that the most recent trace will be first
+        task.traces.reverse()
+        traces = []
+        last_trace = True
+        for trace in task.traces:
+            split_trace = trace.split(maxsplit=1)
+            if len(split_trace) == 2:
+                trace, append = split_trace
+                append = int(append.split()[-1])
+            else:
+                append = 0
+            if last_trace:
+                last_trace = False
+                trace_path = os.path.join(parent_dir,
+                                          "engine_0",
+                                          "trace0.yw")
+            else:
+                append -= 1
+                trace_path = os.path.join(parent_dir,
+                                          "src", 
+                                          trace)
+            traces.append(f"{trace_path} -p {append}")
+
+        # we now need to flip the order back to the expected order
+        task.traces.reverse()
+        traces.reverse()
+        make_deps[trace_list[1]] = trace_list[0]
+        make_deps[trace_list[0]] = f'{parent_dir}\n\tyosys-witness yw2yw {" ".join(traces)} $@'
 
 # generate makefile
 makefile = os.path.join(workdir, "Makefile")
 print(f"Generating {makefile}")
 with open(makefile, "w") as mk:
     print(f"all: {' '.join(make_all)}", file=mk)
-    print("""%:%.sby
-	sby -f $<
-""", file=mk)
+    print("%:%.sby\n\tsby -f $<", file=mk)
+    print(f"%.vcd: %.yw\n\tyosys -p 'read_rtlil {common_il}; sim -hdlname -r $< -vcd $@'", file=mk)
     for (task, dep) in make_deps.items():
         print(f"{task}: {dep}", file=mk)
 
@@ -239,12 +279,24 @@ log_matches = re.finditer(log_regex, make_log, flags=re.MULTILINE)
 task_steps.update({m['task']:int(m['step']) for m in log_matches})
 
 # output stats
+trace_tasks = []
 print("Chunks:")
 for task in task_tree.traverse():
+    if task.stmt == "trace":
+        trace_tasks.append(task)
+        continue
     task.steps = task_steps[f"{task.get_linestr()}_{task.name}"]
     chunk_str = " "*task.depth + f"L{task.line}"
     cycles_str = f"{task.start_cycle():2} .. {task.stop_cycle():2}"
     task_str = task.name if task.is_runnable() else f"{task.stmt} {task.name}"
     print(f"  {chunk_str:6}  {cycles_str}  =>  {task.steps:2}  {task_str}")
+
+print("\nTraces:")
+for task in trace_tasks:
+    cycles_str = f"{task.stop_cycle() + 1:>2} cycles"
+    chunks = task.parent.get_all_linestr()
+    chunks.sort()
+    chunks_str = " ".join(chunks)
+    print(f"  {task.name:12} {cycles_str} [{chunks_str}]")
 
 sys.exit(retcode)

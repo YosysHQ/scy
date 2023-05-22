@@ -2,7 +2,7 @@ import re
 from typing import Iterable
 
 def from_string(string: str, L0: int = 0, depth: int = 0) -> "TaskTree | None":
-    stmt_regex = r"^\s*(?P<stmt>cover|append) (?P<name>\S+?):?\n(?P<body>.*)"
+    stmt_regex = r"^\s*(?P<stmt>cover|append|trace) (?P<name>\S+?):?\n(?P<body>.*)"
     m = re.search(stmt_regex, string, flags=re.DOTALL)
     if not m: # no statement
         return None
@@ -57,10 +57,26 @@ class TaskTree:
         return self.stmt in ["cover"]
     
     def get_tracestr(self):
-        return f"trace{self.line:03d}"
+        if self.is_runnable():
+            return f"trace{self.line:03d}"
+        else:
+            return self.parent.get_tracestr()
     
     def get_linestr(self):
         return f"L{self.line:03d}_{0 if self.is_root() else self.parent.line:03d}"
+    
+    def get_all_linestr(self):
+        linestr = [f"L{self.line:03d}"]
+        if self.is_root():
+            return linestr
+        else:
+            return linestr + self.parent.get_all_linestr()
+    
+    def get_dir(self):
+        if self.is_runnable():
+            return f"{self.get_linestr()}_{self.name}"
+        else:
+            return self.parent.get_dir()
     
     def start_cycle(self) -> int:
         if self.is_root():
