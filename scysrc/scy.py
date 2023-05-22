@@ -230,6 +230,8 @@ for task in task_tree.traverse():
                                           "engine_0",
                                           "trace0.yw")
             else:
+                # using sim -w appears to combine the final step of one trace with the first step of the next
+                # we emulate this by telling yosys-witness to skip one extra cycle than we told sim
                 append -= 1
                 trace_path = os.path.join(parent_dir,
                                           "src", 
@@ -241,6 +243,8 @@ for task in task_tree.traverse():
         traces.reverse()
         make_deps[trace_list[1]] = trace_list[0]
         make_deps[trace_list[0]] = f'{parent_dir}\n\tyosys-witness yw2yw {" ".join(traces)} $@'
+    else:
+        raise NotImplementedError(f"unknown stament {task.stmt} on line {task.line}")
 
 # generate makefile
 makefile = os.path.join(workdir, "Makefile")
@@ -270,8 +274,9 @@ with open(makefile + ".log", 'w') as f:
     print(make_log, file=f)
 
 if retcode:
-    print("Something went wrong!")
-    p.check_returncode()
+    print(f"Something went wrong!  Check {makefile}.log for more info")
+    print(str(p.stderr, encoding="utf-8"))
+    sys.exit(retcode)
 
 # parse sby runs
 log_regex = r"^.*\[(?P<task>.*)\].*(?:reached).*step (?P<step>\d+)$"
@@ -299,4 +304,4 @@ for task in trace_tasks:
     chunks_str = " ".join(chunks)
     print(f"  {task.name:12} {cycles_str} [{chunks_str}]")
 
-sys.exit(retcode)
+sys.exit(0)
