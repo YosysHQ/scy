@@ -37,6 +37,7 @@ always @(posedge clock) begin
             csr_hpmcounter_shadow = rvfi_csr_mhpmcounter3_rdata;
         end
         if (csr_write_valid && csr_hpmevent_under_test) begin
+            assume (!csr_hpmevent_written);
             csr_hpmevent_written = rvfi_csr_mhpmevent3_wdata;
         end
     end
