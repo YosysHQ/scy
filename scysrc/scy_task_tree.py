@@ -2,12 +2,14 @@ import re
 from typing import Iterable
 
 def from_string(string: str, L0: int = 0, depth: int = 0) -> "TaskTree | None":
-    stmt_regex = r"^\s*(?P<stmt>cover|append|trace) (?P<name>\S+?):?\n(?P<body>.*)"
+    stmt_regex = r"^\s*(?P<stmt>cover|append|trace|add) (?P<name>\S+?)( (?P<asgmt>.*?)|):?\n(?P<body>.*)"
     m = re.search(stmt_regex, string, flags=re.DOTALL)
     if not m: # no statement
         return None
 
-    root = TaskTree(name=m.group('name'), stmt=m.group('stmt'), line=L0, depth=depth)
+    d = m.groupdict()
+    root = TaskTree(name=d['name'], stmt=d['stmt'], line=L0, depth=depth,
+                    asgmt=d.get('asgmt', None))
     line = L0 + 1
 
     body_str = m.group('body')
@@ -25,7 +27,8 @@ def from_string(string: str, L0: int = 0, depth: int = 0) -> "TaskTree | None":
 class TaskTree:
     def __init__(self, name: str, stmt: str, line: int, steps: int = -1, depth: int = 0,
                  parent: "TaskTree" = None, children: "list[TaskTree]" = None,
-                 body: str = "", traces: "list[str]" = None):
+                 body: str = "", traces: "list[str]" = None, asgmt: str = None,
+                 enable_cells: "dict[str, str]" = None):
         self.name = name
         self.stmt = stmt
         self.line = line
@@ -41,6 +44,11 @@ class TaskTree:
             self.traces = traces
         else:
             self.traces = []
+        self.asgmt = asgmt
+        if enable_cells:
+            self.enable_cells = enable_cells
+        else:
+            self.enable_cells = {}
 
     def add_child(self, child: "TaskTree"):
         child.parent = self
@@ -77,6 +85,13 @@ class TaskTree:
             return f"{self.get_linestr()}_{self.name}"
         else:
             return self.parent.get_dir()
+
+    def get_asgmt(self):
+        if self.asgmt:
+            asgmt_regex = r"(?P<lhs>.*?)\s*(?P<op>[!=<>]+)\s*(?P<rhs>.*)"
+            return re.search(asgmt_regex, self.asgmt).groupdict()
+        else:
+            return None
     
     def start_cycle(self) -> int:
         if self.is_root():
@@ -97,6 +112,8 @@ class TaskTree:
 
     def __str__(self):
         strings: list[str] = [f"{self.get_linestr()} => {self.stmt} {self.name}"]
+        if self.asgmt:
+            strings[0] += f" ({self.asgmt})"
         if self.body:
             strings += self.body.split('\n')[:-1]
         for child in self.children:

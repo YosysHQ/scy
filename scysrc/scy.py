@@ -106,6 +106,15 @@ for (name, body) in scycfg.items():
         body = newbody
     sbycfg[name] = body
 
+# preparse tree to extract cell generation
+add_cells: "dict[int, dict[str]]" = {}
+for task in task_tree.traverse():
+    if task.stmt == "add":
+        if task.name not in ["assert", "assume", "live", "fair", "cover"]:
+            raise NotImplementedError(f"cell type {task.name!r} on line {task.line}")
+        add_cells[task.line] = {"type": task.name}
+        add_cells[task.line].update(task.get_asgmt())
+
 # use sby to prepare input
 print(f"Preparing input files")
 task_sby = os.path.join(f"{workdir}", 
@@ -116,6 +125,14 @@ with open(task_sby, 'w') as sbyfile:
             continue
         elif name == "options":
             body = sby_body_append(body, "mode prep")
+        if name == "script":
+            for (line, cell) in add_cells.items():
+                body = sby_body_append(body, [f"add -{cell['type']} {cell['lhs']} # line {line}",
+                                              f"setattr -set scy_line {line}  w:{cell['lhs']} %co c:$auto$add* %i"])
+            if add_cells:
+                add_log = "add_cells.log"
+                body = sby_body_append(body, f"tee -o {add_log} printattrs a:scy_line")
+                add_log = os.path.join(workdir, "common", "src", add_log)
         print(f"[{name}]", file=sbyfile)
         print(body, file=sbyfile)
 retcode = 0
@@ -124,8 +141,13 @@ print(f'Running "{" ".join(sby_args)}"')
 p = subprocess.run(sby_args, cwd=workdir, capture_output=True)
 retcode = p.returncode
 
-if args.dump_common or retcode:
+if retcode:
+    sby_logfile = os.path.join(workdir, 'common', 'logfile.txt')
+    print(f"Something went wrong!  Check {sby_logfile} for more info")
+    print(str(p.stderr, encoding="utf-8"))
     sys.exit(retcode)
+elif args.dump_common:
+    sys.exit(0)
 
 if opt_replay_vcd:
     # load top level design name back from generated model
@@ -138,6 +160,18 @@ if opt_replay_vcd:
     trace_ext = "vcd"
 else:
     trace_ext = "yw"
+
+if add_log:
+    # load back added cells
+    with open(add_log, 'r') as f:
+        for line in f:
+            cell = line.rstrip()
+            try:
+                line = re.search(r"scy_line=(\d+)", f.readline()).group(1)
+            except AttributeError:
+                break
+            line = int(line, base=2)
+            add_cells[line]["cell"] = cell
 
 # modify config for full sby runs
 sbycfg["options"] = sby_body_append(
@@ -244,7 +278,7 @@ for task in task_tree.traverse():
         make_deps[trace_list[1]] = trace_list[0]
         make_deps[trace_list[0]] = f'{parent_dir}\n\tyosys-witness yw2yw {" ".join(traces)} $@'
     else:
-        raise NotImplementedError(f"unknown stament {task.stmt} on line {task.line}")
+        raise NotImplementedError(f"unknown stament {task.stmt!r} on line {task.line}")
 
 # generate makefile
 makefile = os.path.join(workdir, "Makefile")
