@@ -12,10 +12,10 @@ reg [31:0] csr_hpmcounter_shadow = 0;
 reg [31:0] csr_hpmevent_written = 0;
 (* keep *)
 reg reset_q = 0;
+(* keep *)
+wire reset_n = !reset;
 always @(posedge clock) begin
     cp_reset_done: cover(!reset && reset_q);
-    if (reset_q)
-        assume (!reset);
     if (reset) begin
         reset_q = 1;
         csr_hpmcounter_shadowed = 0;

@@ -87,9 +87,8 @@ class TaskTree:
             return self.parent.get_dir()
 
     def get_asgmt(self):
-        if self.asgmt:
-            asgmt_regex = r"(?P<lhs>.*?)\s*(?P<op>[!=<>]+)\s*(?P<rhs>.*)"
-            return re.search(asgmt_regex, self.asgmt).groupdict()
+        if self.get_asgmt:
+            return {"lhs": self.asgmt}
         else:
             return None
     
@@ -101,7 +100,14 @@ class TaskTree:
 
     def stop_cycle(self) -> int:
         start = self.start_cycle()
-        return start + self.steps
+        if self.steps >= 0:
+            start += self.steps
+        return start
+    
+    def reduce_depth(self, amount: int = 1):
+        self.depth = max(0, self.depth - amount)
+        for child in self.children:
+            child.reduce_depth(amount)
 
     def traverse(self, include_self = True) -> Iterable["TaskTree"]:
         if include_self:

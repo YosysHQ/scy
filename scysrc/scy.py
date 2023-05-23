@@ -189,6 +189,7 @@ make_all = []
 make_deps = {}
 task_steps = {}
 for task in task_tree.traverse():
+    task_trace = None
     # each task has its own sby file
     if task.is_runnable():
         task_dir = f"{task.get_linestr()}_{task.name}"
@@ -213,28 +214,29 @@ for task in task_tree.traverse():
                         body = sby_body_append(body, 
                                             traces + [f"{parent.get_tracestr()}.{trace_ext} {parent_yw}"])
                 if name == "script":
+                    # configure additional cells
+                    for cell in add_cells.values():
+                        en_sig = '1' if cell["cell"] in task.enable_cells else '0'
+                        body = sby_body_append(body, 
+                                               f"connect -port {cell['cell']} \EN 1'b{en_sig}")
                     # replay prior traces and enable only relevant cover
                     traces_script = []
                     for trace in task.traces:
                         trace_scope = f" -scope {design_scope}" if opt_replay_vcd else ""
-                        traces_script += [f"sim -w -r {trace}{trace_scope}"]
+                        traces_script.append(f"sim -w -r {trace}{trace_scope}")
                     if task.stmt == "cover":
-                        body = sby_body_append(body, 
-                                            traces_script + [f"delete t:$cover a:hdlname=*{task.name} %d"])
+                        traces_script.append(f"delete t:$cover a:hdlname=*{task.name} %d")
+                        body = sby_body_append(body, traces_script)
                     else:
                         raise NotImplementedError(task.stmt)
                 print(f"[{name}]", file=sbyfile)
                 print(body, file=sbyfile)
-        # add this trace to child
-        for child in task.children:
-            child.traces += task.traces + [f"{task.get_tracestr()}.{trace_ext}"]
+        task_trace = f"{task.get_tracestr()}.{trace_ext}"
     elif task.stmt == "append":
         if opt_replay_vcd:
             raise NotImplementedError(f"replay_vcd option with append statement on line {task.line}")
         task.traces[-1] += f" -append {int(task.name):d}"
         task_steps[f"{task.get_linestr()}_{task.name}"] = int(task.name)
-        for child in task.children:
-            child.traces += task.traces
     elif task.stmt == "trace":
         if opt_replay_vcd:
             raise NotImplementedError(f"replay_vcd option with trace statement on line {task.line}")
@@ -277,8 +279,19 @@ for task in task_tree.traverse():
         traces.reverse()
         make_deps[trace_list[1]] = trace_list[0]
         make_deps[trace_list[0]] = f'{parent_dir}\n\tyosys-witness yw2yw {" ".join(traces)} $@'
+    elif task.stmt == "add":
+        add_cell = add_cells[task.line]
+        task.enable_cells[add_cell["cell"]] = add_cell
+        task.reduce_depth()
     else:
         raise NotImplementedError(f"unknown stament {task.stmt!r} on line {task.line}")
+    
+    # add traces to children
+    for child in task.children:
+        child.traces.extend(task.traces)
+        if task_trace:
+            child.traces.append(task_trace)
+        child.enable_cells.update(task.enable_cells)
 
 # generate makefile
 makefile = os.path.join(workdir, "Makefile")
@@ -323,6 +336,7 @@ print("Chunks:")
 for task in task_tree.traverse():
     if task.stmt == "trace":
         trace_tasks.append(task)
+    if task.stmt not in ["append", "cover"]:
         continue
     task.steps = task_steps[f"{task.get_linestr()}_{task.name}"]
     chunk_str = " "*task.depth + f"L{task.line}"
