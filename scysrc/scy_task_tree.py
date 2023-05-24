@@ -25,7 +25,7 @@ def from_string(string: str, L0: int = 0, depth: int = 0) -> "TaskTree | None":
     return root
 
 class TaskTree:
-    def __init__(self, name: str, stmt: str, line: int, steps: int = -1, depth: int = 0,
+    def __init__(self, name: str, stmt: str, line: int, steps: int = 0, depth: int = 0,
                  parent: "TaskTree" = None, children: "list[TaskTree]" = None,
                  body: str = "", traces: "list[str]" = None, asgmt: str = None,
                  enable_cells: "dict[str, str]" = None):
@@ -100,9 +100,7 @@ class TaskTree:
 
     def stop_cycle(self) -> int:
         start = self.start_cycle()
-        if self.steps >= 0:
-            start += self.steps
-        return start
+        return start + self.steps
     
     def reduce_depth(self, amount: int = 1):
         self.depth = max(0, self.depth - amount)

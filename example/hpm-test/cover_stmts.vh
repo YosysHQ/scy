@@ -4,13 +4,9 @@ wire csr_hpmcounter_under_test = csr_insn_addr == 12'h B03 || csr_insn_addr == 1
 wire csr_hpmevent_under_test = csr_insn_addr == 12'h 323;
 wire csr_write_valid = (!rvfi_insn[13] || rvfi_insn[19:15]) && csr_insn_valid;
 wire csr_read_valid = rvfi_insn[11:7] != 0 && csr_insn_valid;
-(* keep *)
 reg csr_hpmcounter_shadowed = 0;
-(* keep *)
 reg [31:0] csr_hpmcounter_shadow = 0;
-(* keep *)
 reg [31:0] csr_hpmevent_written = 0;
-(* keep *)
 reg reset_q = 0;
 (* keep *)
 wire reset_n = !reset;
