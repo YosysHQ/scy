@@ -2,7 +2,8 @@ import re
 from typing import Iterable
 
 def from_string(string: str, L0: int = 0, depth: int = 0) -> "TaskTree | None":
-    stmt_regex = r"^\s*(?P<stmt>cover|append|trace|add) (?P<name>\S+?)( (?P<asgmt>.*?)|):?\n(?P<body>.*)"
+    stmt_regex = r"^\s*(?P<stmt>cover|append|trace|add|disable|enable) "\
+                 r"(?P<name>\S+?)( (?P<asgmt>.*?)|)(:\n(?P<body>.*)|\n)"
     m = re.search(stmt_regex, string, flags=re.DOTALL)
     if not m: # no statement
         return None
@@ -14,13 +15,14 @@ def from_string(string: str, L0: int = 0, depth: int = 0) -> "TaskTree | None":
 
     body_str = m.group('body')
     body_regex = r"(?P<ws>\s+).*?\n(?=(?P=ws)\S|$)"
-    for m in re.finditer(body_regex, body_str, flags=re.DOTALL):
-        child = from_string(m.group(0), line, depth+1)
-        if child:
-            root.add_child(child)
-        else:
-            root.body += m.group(0)
-        line += m.group(0).count('\n')
+    if body_str:
+        for m in re.finditer(body_regex, body_str, flags=re.DOTALL):
+            child = from_string(m.group(0), line, depth+1)
+            if child:
+                root.add_child(child)
+            else:
+                root.body += m.group(0)
+            line += m.group(0).count('\n')
 
     return root
 
@@ -28,7 +30,7 @@ class TaskTree:
     def __init__(self, name: str, stmt: str, line: int, steps: int = 0, depth: int = 0,
                  parent: "TaskTree" = None, children: "list[TaskTree]" = None,
                  body: str = "", traces: "list[str]" = None, asgmt: str = None,
-                 enable_cells: "dict[str, str]" = None):
+                 enable_cells: "dict[str, dict[str, str]]" = None):
         self.name = name
         self.stmt = stmt
         self.line = line

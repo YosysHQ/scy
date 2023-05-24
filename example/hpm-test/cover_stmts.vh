@@ -4,14 +4,20 @@ wire csr_hpmcounter_under_test = csr_insn_addr == 12'h B03 || csr_insn_addr == 1
 wire csr_hpmevent_under_test = csr_insn_addr == 12'h 323;
 wire csr_write_valid = (!rvfi_insn[13] || rvfi_insn[19:15]) && csr_insn_valid;
 wire csr_read_valid = rvfi_insn[11:7] != 0 && csr_insn_valid;
-reg csr_hpmcounter_shadowed = 0;
-reg [31:0] csr_hpmcounter_shadow = 0;
-reg [31:0] csr_hpmevent_written = 0;
-reg reset_q = 0;
+reg csr_hpmcounter_shadowed;
+reg [31:0] csr_hpmcounter_shadow;
+reg [31:0] csr_hpmevent_written;
+reg reset_q;
 (* keep *)
 wire reset_n = !reset;
+
+initial begin
+    reset_q = 0;
+end
+
 always @(posedge clock) begin
     cp_reset_done: cover(!reset && reset_q);
+    ap_nowrite: assume (!csr_write_valid);
     if (reset) begin
         reset_q = 1;
         csr_hpmcounter_shadowed = 0;

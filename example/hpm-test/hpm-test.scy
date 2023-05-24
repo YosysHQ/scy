@@ -13,17 +13,19 @@ replay_vcd off
 cover cp_reset_done:
     trace reset
     add assume checker_inst.reset_n:
-        cover cp_hpmcounter
-        cover cp_hpmevent2:
-            cover cp_hpmcounter:
-                trace hpm_event2
+        disable checker_inst.ap_nowrite:
+            cover cp_hpmcounter
+            cover cp_hpmevent2:
+                enable checker_inst.ap_nowrite:
+                    cover cp_hpmcounter:
+                        trace hpm_event2
 
-        cover cp_hpmevent3:
-            cover cp_hpmcounter:
-                trace hpm_event3
-            append -3:
+            cover cp_hpmevent3:
                 cover cp_hpmcounter:
-                    trace hpm_event3_2
+                    trace hpm_event3
+                append -3:
+                    cover cp_hpmcounter:
+                        trace hpm_event3_2
 
 [files]
 ../../../riscv-formal/checks/rvfi_macros.vh

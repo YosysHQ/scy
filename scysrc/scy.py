@@ -108,12 +108,16 @@ for (name, body) in scycfg.items():
 
 # preparse tree to extract cell generation
 add_cells: "dict[int, dict[str]]" = {}
+enable_cells: "dict[str, dict[str, str | bool]]" = {}
 for task in task_tree.traverse():
     if task.stmt == "add":
         if task.name not in ["assert", "assume", "live", "fair", "cover"]:
             raise NotImplementedError(f"cell type {task.name!r} on line {task.line}")
         add_cells[task.line] = {"type": task.name}
         add_cells[task.line].update(task.get_asgmt())
+    if task.stmt in ["enable", "disable"]:
+        enable_cells.setdefault(task.name, {"disable": "1'b0"})
+        enable_cells[task.name][f"does_{task.stmt}"] = True
 
 # use sby to prepare input
 print(f"Preparing input files")
@@ -129,6 +133,9 @@ with open(task_sby, 'w') as sbyfile:
             for (line, cell) in add_cells.items():
                 body = sby_body_append(body, [f"add -{cell['type']} {cell['lhs']} # line {line}",
                                               f"setattr -set scy_line {line}  w:{cell['lhs']} %co c:$auto$add* %i"])
+            for hdlname in enable_cells.keys():
+                select = f"w:*:*_EN c:{hdlname} %ci:+[EN] %i"
+                body = sby_body_append(body, f"setattr -set scy_line 0 -set hdlname \"{hdlname}\" {select}")
             if add_cells:
                 add_log = "add_cells.log"
                 body = sby_body_append(body, f"tee -o {add_log} printattrs a:scy_line")
@@ -164,14 +171,18 @@ else:
 if add_log:
     # load back added cells
     with open(add_log, 'r') as f:
-        for line in f:
-            cell = line.rstrip()
-            try:
-                line = re.search(r"scy_line=(\d+)", f.readline()).group(1)
-            except AttributeError:
-                break
-            line = int(line, base=2)
-            add_cells[line]["cell"] = cell
+        cell_dump = f.read()
+        cell_regex = r"(?P<cell>\S*)(?:\n  (.. scy_line=(?P<scy_line>\d+) ..|.. hdlname=\"(?P<hdlname>.*)\" ..|(?:.*)))*"
+        for m in re.finditer(cell_regex, cell_dump):
+            d = m.groupdict()
+            if not d["cell"]:
+                continue
+            if d["hdlname"]:
+                name = d["hdlname"].split()[-1]
+                enable_cells[hdlname]["enable"] = d["cell"]
+            else:
+                line = int(d["scy_line"], base=2)
+                add_cells[line]["cell"] = d["cell"]
 
 # modify config for full sby runs
 sbycfg["options"] = sby_body_append(
@@ -190,6 +201,15 @@ make_deps = {}
 task_steps = {}
 for task in task_tree.traverse():
     task_trace = None
+    if task.is_root():
+        for name, vals in enable_cells.items():
+            if not vals.get("does_enable", False):
+                task.enable_cells[name] = enable_cells[name].copy()
+                task.enable_cells[name]["status"] = "enable"
+            elif not vals.get("does_disable", False):
+                task.enable_cells[name] = enable_cells[name].copy()
+                task.enable_cells[name]["status"] = "disable"
+
     # each task has its own sby file
     if task.is_runnable():
         task_dir = f"{task.get_linestr()}_{task.name}"
@@ -215,10 +235,18 @@ for task in task_tree.traverse():
                                             traces + [f"{parent.get_tracestr()}.{trace_ext} {parent_yw}"])
                 if name == "script":
                     # configure additional cells
+                    connect_commands = []
                     for cell in add_cells.values():
                         en_sig = '1' if cell["cell"] in task.enable_cells else '0'
-                        body = sby_body_append(body, 
-                                               f"connect -port {cell['cell']} \EN 1'b{en_sig}")
+                        connect_commands.append(f"connect -port {cell['cell']} \EN 1'b{en_sig}")
+                    for hdlname in enable_cells.keys():
+                        task_cell = task.enable_cells.get(hdlname, None)
+                        if task_cell:
+                            en_sig = task_cell[task_cell["status"]]
+                            connect_commands.append(f"connect -port {hdlname} \EN {en_sig}")
+                            if task_cell["status"] == "enable":
+                                connect_commands.append(f"chformal -skip 1 c:{hdlname}")
+                    body = sby_body_append(body, connect_commands)
                     # replay prior traces and enable only relevant cover
                     traces_script = []
                     for trace in task.traces:
@@ -283,6 +311,11 @@ for task in task_tree.traverse():
         add_cell = add_cells[task.line]
         task.enable_cells[add_cell["cell"]] = add_cell
         task.reduce_depth()
+    elif task.stmt in ["enable", "disable"]:
+        if task.name not in task.enable_cells:
+            task.enable_cells[task.name] = enable_cells[task.name].copy()
+        task.enable_cells[task.name]["status"] = task.stmt
+        task.enable_cells[task.name]["line"] = task.line
     else:
         raise NotImplementedError(f"unknown stament {task.stmt!r} on line {task.line}")
     
@@ -291,7 +324,11 @@ for task in task_tree.traverse():
         child.traces.extend(task.traces)
         if task_trace:
             child.traces.append(task_trace)
-        child.enable_cells.update(task.enable_cells)
+        for k, v in task.enable_cells.items():
+            try:
+                child.enable_cells[k].update(v)
+            except KeyError:
+                child.enable_cells[k] = v.copy()
 
 # generate makefile
 makefile = os.path.join(workdir, "Makefile")
