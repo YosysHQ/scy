@@ -109,20 +109,32 @@ for (name, body) in scycfg.items():
 # preparse tree to extract cell generation
 add_cells: "dict[int, dict[str]]" = {}
 enable_cells: "dict[str, dict[str, str | bool]]" = {}
+def add_enable_cell(hdlname: str, stmt: str):
+    enable_cells.setdefault(hdlname, {"disable": "1'b0"})
+    enable_cells[hdlname][f"does_{stmt}"] = True
+
 for task in task_tree.traverse():
     if task.stmt == "add":
         if task.name not in ["assert", "assume", "live", "fair", "cover"]:
             raise NotImplementedError(f"cell type {task.name!r} on line {task.line}")
         add_cells[task.line] = {"type": task.name}
         add_cells[task.line].update(task.get_asgmt())
-    if task.stmt in ["enable", "disable"]:
-        enable_cells.setdefault(task.name, {"disable": "1'b0"})
-        enable_cells[task.name][f"does_{task.stmt}"] = True
+    elif task.stmt in ["enable", "disable"]:
+        add_enable_cell(task.name, task.stmt)
+    elif task.body:
+        for line in task.body.split('\n'):
+            try:
+                stmt, hdlname = line.split()
+            except ValueError:
+                continue
+            if stmt in ["enable", "disable"]:
+                add_enable_cell(hdlname, stmt)
 
 # use sby to prepare input
 print(f"Preparing input files")
 task_sby = os.path.join(f"{workdir}", 
                         f"common.sby")
+add_log = None
 with open(task_sby, 'w') as sbyfile:
     for (name, body) in sbycfg.items():
         if name in "engines":
@@ -135,8 +147,8 @@ with open(task_sby, 'w') as sbyfile:
                                               f"setattr -set scy_line {line}  w:{cell['lhs']} %co c:$auto$add* %i"])
             for hdlname in enable_cells.keys():
                 select = f"w:*:*_EN c:{hdlname} %ci:+[EN] %i"
-                body = sby_body_append(body, f"setattr -set scy_line 0 -set hdlname \"{hdlname}\" {select}")
-            if add_cells:
+                body = sby_body_append(body, f"setattr -set scy_line 0 -set hdlname:{hdlname} 1 {select}")
+            if add_cells or enable_cells:
                 add_log = "add_cells.log"
                 body = sby_body_append(body, f"tee -o {add_log} printattrs a:scy_line")
                 add_log = os.path.join(workdir, "common", "src", add_log)
@@ -172,17 +184,18 @@ if add_log:
     # load back added cells
     with open(add_log, 'r') as f:
         cell_dump = f.read()
-        cell_regex = r"(?P<cell>\S*)(?:\n  (.. scy_line=(?P<scy_line>\d+) ..|.. hdlname=\"(?P<hdlname>.*)\" ..|(?:.*)))*"
-        for m in re.finditer(cell_regex, cell_dump):
-            d = m.groupdict()
-            if not d["cell"]:
-                continue
-            if d["hdlname"]:
-                name = d["hdlname"].split()[-1]
-                enable_cells[hdlname]["enable"] = d["cell"]
-            else:
-                line = int(d["scy_line"], base=2)
-                add_cells[line]["cell"] = d["cell"]
+        cell_regex = r"(?P<cell>\S+)(?P<body>(?:\n  (?:.*))*)"
+        for cell_m in re.finditer(cell_regex, cell_dump):
+            property_regex = r"  .. (?P<pty>[^:]+?)(?::(?P<name>.+?))?=(?P<val>.*) .."
+            cell = cell_m.group("cell")
+            for m in re.finditer(property_regex, cell_m.group("body")):
+                d = m.groupdict()
+                if d["pty"] == "hdlname":
+                    enable_cells[d["name"]]["enable"] = cell
+                elif d["pty"] == "scy_line":
+                    line = int(d["val"], base=2)
+                    if line:
+                        add_cells[line]["cell"] = cell
 
 # modify config for full sby runs
 sbycfg["options"] = sby_body_append(
@@ -242,6 +255,12 @@ for task in task_tree.traverse():
                         pre_sim_commands.append(f"connect -port {cell['cell']} \EN 1'b{en_sig}")
                     for hdlname in enable_cells.keys():
                         task_cell = task.enable_cells.get(hdlname, None)
+                        if task.has_local_enable_cells():
+                            for line in task.body.split('\n'):
+                                if hdlname in line:
+                                    task_cell = enable_cells[hdlname].copy()
+                                    task_cell["status"] = line.split()[0]
+                                    break
                         if task_cell:
                             status = task_cell["status"]
                             pre_sim_commands.append(f"connect -port {hdlname} \EN {task_cell[status]}")

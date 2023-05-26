@@ -9,6 +9,10 @@ def from_string(string: str, L0: int = 0, depth: int = 0) -> "TaskTree | None":
         return None
 
     d = m.groupdict()
+    # check for standalone body statements
+    if d['stmt'] in ["enable", "disable"] and not d['body']:
+        return None
+    # otherwise continue recursively
     root = TaskTree(name=d['name'], stmt=d['stmt'], line=L0, depth=depth,
                     asgmt=d.get('asgmt', None))
     line = L0 + 1
@@ -65,6 +69,9 @@ class TaskTree:
     
     def is_runnable(self):
         return self.stmt in ["cover"]
+    
+    def has_local_enable_cells(self):
+        return "enable" in self.body or "disable" in self.body
     
     def get_tracestr(self):
         if self.is_runnable():

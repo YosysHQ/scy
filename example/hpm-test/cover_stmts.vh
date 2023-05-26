@@ -18,6 +18,7 @@ end
 always @(posedge clock) begin
     cp_reset_done: cover(!reset && reset_q);
     ap_nowrite: assume (!csr_write_valid);
+    ap_noreset: assume(reset_n);
     if (reset) begin
         reset_q = 1;
         csr_hpmcounter_shadowed = 0;
