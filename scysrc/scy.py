@@ -235,18 +235,19 @@ for task in task_tree.traverse():
                                             traces + [f"{parent.get_tracestr()}.{trace_ext} {parent_yw}"])
                 if name == "script":
                     # configure additional cells
-                    connect_commands = []
+                    pre_sim_commands = []
+                    post_sim_commands = []
                     for cell in add_cells.values():
                         en_sig = '1' if cell["cell"] in task.enable_cells else '0'
-                        connect_commands.append(f"connect -port {cell['cell']} \EN 1'b{en_sig}")
+                        pre_sim_commands.append(f"connect -port {cell['cell']} \EN 1'b{en_sig}")
                     for hdlname in enable_cells.keys():
                         task_cell = task.enable_cells.get(hdlname, None)
                         if task_cell:
-                            en_sig = task_cell[task_cell["status"]]
-                            connect_commands.append(f"connect -port {hdlname} \EN {en_sig}")
-                            if task_cell["status"] == "enable":
-                                connect_commands.append(f"chformal -skip 1 c:{hdlname}")
-                    body = sby_body_append(body, connect_commands)
+                            status = task_cell["status"]
+                            pre_sim_commands.append(f"connect -port {hdlname} \EN {task_cell[status]}")
+                            if status == "enable":
+                                post_sim_commands.append(f"chformal -skip 1 c:{hdlname}")
+                    body = sby_body_append(body, pre_sim_commands)
                     # replay prior traces and enable only relevant cover
                     traces_script = []
                     for trace in task.traces:
@@ -257,6 +258,7 @@ for task in task_tree.traverse():
                         body = sby_body_append(body, traces_script)
                     else:
                         raise NotImplementedError(task.stmt)
+                    body = sby_body_append(body, post_sim_commands)
                 print(f"[{name}]", file=sbyfile)
                 print(body, file=sbyfile)
         task_trace = f"{task.get_tracestr()}.{trace_ext}"
