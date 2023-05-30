@@ -2,7 +2,7 @@ import re
 from typing import Iterable
 
 def from_string(string: str, L0: int = 0, depth: int = 0) -> "TaskTree | None":
-    stmt_regex = r"^\s*(?P<stmt>cover|append|trace|add|disable|enable) "\
+    stmt_regex = r"^(?P<ws>\s*)(?P<stmt>cover|append|trace|add|disable|enable) "\
                  r"(?P<name>\S+?)( (?P<asgmt>.*?)|)(:\n(?P<body>.*)|\n)"
     m = re.search(stmt_regex, string, flags=re.DOTALL)
     if not m: # no statement
@@ -12,10 +12,13 @@ def from_string(string: str, L0: int = 0, depth: int = 0) -> "TaskTree | None":
     # check for standalone body statements
     if d['stmt'] in ["enable", "disable"] and not d['body']:
         return None
+    
+    line = L0 + d["ws"].count('\n')
+
     # otherwise continue recursively
-    root = TaskTree(name=d['name'], stmt=d['stmt'], line=L0, depth=depth,
+    root = TaskTree(name=d['name'], stmt=d['stmt'], line=line, depth=depth,
                     asgmt=d.get('asgmt', None))
-    line = L0 + 1
+    line += 1
 
     body_str = m.group('body')
     body_regex = r"(?P<ws>\s+).*?\n(?=(?P=ws)\S|$)"

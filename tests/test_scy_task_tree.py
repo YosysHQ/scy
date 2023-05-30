@@ -41,6 +41,10 @@ class TestMinimalTreeClass:
                                      else "none", self.task_tree)
         assert root_or_leaf == ["root", "none", "leaf", "leaf"]
 
+    def test_mintree_lines(self):
+        lines = get_tree_list(lambda x: x.line, self.task_tree)
+        assert lines == [0, 1, 2, 3]
+
 def test_enable_stmt():
     task_tree = TaskTree.from_string(dedent("""\
         cover a:
@@ -66,4 +70,33 @@ def test_enable_body():
     """))
 
     assert len(task_tree) == 2
+    assert task_tree.body.strip() == "enable cell b"
     assert task_tree.has_local_enable_cells
+
+def test_tree_blank_line():
+    task_tree = TaskTree.from_string(dedent("""\
+        
+        cover a
+    """))
+
+    assert len(task_tree) == 1
+    assert task_tree.stmt == "cover"
+    assert task_tree.line == 1
+
+def test_bad_stmt():
+    task_tree = TaskTree.from_string(dedent("""\
+        help
+    """))
+
+    assert not task_tree
+
+# This test might be less of a "does the code do what we want" 
+#   and more "if the code changes, this test will fail"
+def test_no_colon():
+    task_tree = TaskTree.from_string(dedent("""\
+        cover a
+            cover b
+    """))
+
+    assert len(task_tree) == 1
+    assert task_tree.name == "a"
