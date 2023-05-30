@@ -61,37 +61,43 @@ class TaskTree:
         self.children.append(child)
         return self
 
-    def is_root(self):
+    @property
+    def is_root(self) -> bool:
         return self.parent is None
     
-    def is_leaf(self):
+    @property
+    def is_leaf(self) -> bool:
         return not self.children
     
-    def is_runnable(self):
+    @property
+    def is_runnable(self) -> bool:
         return self.stmt in ["cover"]
     
-    def has_local_enable_cells(self):
+    @property
+    def has_local_enable_cells(self) -> bool:
         return "enable" in self.body or "disable" in self.body
     
-    def get_tracestr(self):
-        if self.is_runnable():
+    @property
+    def tracestr(self) -> str:
+        if self.is_runnable:
             return f"trace{self.line:03d}"
         else:
-            return self.parent.get_tracestr()
+            return self.parent.tracestr
     
-    def get_linestr(self):
-        return f"L{self.line:03d}_{0 if self.is_root() else self.parent.line:03d}"
+    @property
+    def linestr(self) -> str:
+        return f"L{self.line:03d}_{0 if self.is_root else self.parent.line:03d}"
     
-    def get_all_linestr(self):
+    def get_all_linestr(self) -> "list[str]":
         linestr = [f"L{self.line:03d}"]
-        if self.is_root():
+        if self.is_root:
             return linestr
         else:
             return linestr + self.parent.get_all_linestr()
     
-    def get_dir(self):
-        if self.is_runnable():
-            return f"{self.get_linestr()}_{self.name}"
+    def get_dir(self) -> str:
+        if self.is_runnable:
+            return f"{self.linestr}_{self.name}"
         else:
             return self.parent.get_dir()
 
@@ -101,14 +107,16 @@ class TaskTree:
         else:
             return None
     
+    @property
     def start_cycle(self) -> int:
-        if self.is_root():
+        if self.is_root:
             return 0
         else:
-            return self.parent.stop_cycle()
+            return self.parent.stop_cycle
 
+    @property
     def stop_cycle(self) -> int:
-        start = self.start_cycle()
+        start = self.start_cycle
         return start + self.steps
     
     def reduce_depth(self, amount: int = 1):
@@ -124,7 +132,7 @@ class TaskTree:
                 yield task
 
     def __str__(self):
-        strings: list[str] = [f"{self.get_linestr()} => {self.stmt} {self.name}"]
+        strings: list[str] = [f"{self.linestr} => {self.stmt} {self.name}"]
         if self.asgmt:
             strings[0] += f" ({self.asgmt})"
         if self.body:
@@ -133,4 +141,10 @@ class TaskTree:
             strings += str(child).split('\n')
         return "\n ".join(strings)
     
+    def __len__(self):
+        length = 1
+        for child in self.children:
+            length += len(child)
+        return length
+
     from_string = staticmethod(from_string)

@@ -214,7 +214,7 @@ make_deps = {}
 task_steps = {}
 for task in task_tree.traverse():
     task_trace = None
-    if task.is_root():
+    if task.is_root:
         for name, vals in enable_cells.items():
             if not vals.get("does_enable", False):
                 task.enable_cells[name] = enable_cells[name].copy()
@@ -224,15 +224,15 @@ for task in task_tree.traverse():
                 task.enable_cells[name]["status"] = "disable"
 
     # each task has its own sby file
-    if task.is_runnable():
-        task_dir = f"{task.get_linestr()}_{task.name}"
+    if task.is_runnable:
+        task_dir = f"{task.linestr}_{task.name}"
         make_all.append(task_dir)
         task_sby = os.path.join(f"{workdir}", 
                                 f"{task_dir}.sby")
         print(f"Generating {task_sby}")
         with open(task_sby, 'w') as sbyfile:
             for (name, body) in sbycfg.items():
-                if not task.is_root():
+                if not task.is_root:
                     # child nodes depend on parent
                     parent = task.parent
                     parent_dir = task.parent.get_dir()
@@ -245,7 +245,7 @@ for task in task_tree.traverse():
                                             "src", 
                                             trace.split()[0]) for trace in task.traces[:-1]]
                         body = sby_body_append(body, 
-                                            traces + [f"{parent.get_tracestr()}.{trace_ext} {parent_yw}"])
+                                            traces + [f"{parent.tracestr}.{trace_ext} {parent_yw}"])
                 if name == "script":
                     # configure additional cells
                     pre_sim_commands = []
@@ -255,7 +255,7 @@ for task in task_tree.traverse():
                         pre_sim_commands.append(f"connect -port {cell['cell']} \EN 1'b{en_sig}")
                     for hdlname in enable_cells.keys():
                         task_cell = task.enable_cells.get(hdlname, None)
-                        if task.has_local_enable_cells():
+                        if task.has_local_enable_cells:
                             for line in task.body.split('\n'):
                                 if hdlname in line:
                                     task_cell = enable_cells[hdlname].copy()
@@ -280,18 +280,18 @@ for task in task_tree.traverse():
                     body = sby_body_append(body, post_sim_commands)
                 print(f"[{name}]", file=sbyfile)
                 print(body, file=sbyfile)
-        task_trace = f"{task.get_tracestr()}.{trace_ext}"
+        task_trace = f"{task.tracestr}.{trace_ext}"
     elif task.stmt == "append":
         if opt_replay_vcd:
             raise NotImplementedError(f"replay_vcd option with append statement on line {task.line}")
         task.traces[-1] += f" -append {int(task.name):d}"
-        task_steps[f"{task.get_linestr()}_{task.name}"] = int(task.name)
+        task_steps[f"{task.linestr}_{task.name}"] = int(task.name)
     elif task.stmt == "trace":
         if opt_replay_vcd:
             raise NotImplementedError(f"replay_vcd option with trace statement on line {task.line}")
-        if not task.is_leaf():
+        if not task.is_leaf:
             raise NotImplementedError(f"trace statement has children on line {task.line}")
-        if task.is_root():
+        if task.is_root:
             raise NotImplementedError(f"trace statement is root on line {task.line}")
 
         trace_list = [f"{task.name}.{ext}" for ext in ["yw", "vcd"]]
@@ -396,15 +396,15 @@ for task in task_tree.traverse():
         trace_tasks.append(task)
     if task.stmt not in ["append", "cover"]:
         continue
-    task.steps = task_steps[f"{task.get_linestr()}_{task.name}"]
+    task.steps = task_steps[f"{task.linestr}_{task.name}"]
     chunk_str = " "*task.depth + f"L{task.line}"
-    cycles_str = f"{task.start_cycle():2} .. {task.stop_cycle():2}"
-    task_str = task.name if task.is_runnable() else f"{task.stmt} {task.name}"
+    cycles_str = f"{task.start_cycle:2} .. {task.stop_cycle:2}"
+    task_str = task.name if task.is_runnable else f"{task.stmt} {task.name}"
     print(f"  {chunk_str:6}  {cycles_str}  =>  {task.steps:2}  {task_str}")
 
 print("\nTraces:")
 for task in trace_tasks:
-    cycles_str = f"{task.stop_cycle() + 1:>2} cycles"
+    cycles_str = f"{task.stop_cycle + 1:>2} cycles"
     chunks = task.parent.get_all_linestr()
     chunks.sort()
     chunks_str = " ".join(chunks)
