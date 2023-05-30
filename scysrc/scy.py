@@ -32,7 +32,6 @@ parser.add_argument('scyfile', metavar="<jobname>.scy",
 args = parser.parse_args()
 scyfile = args.scyfile
 workdir = args.workdir
-opt_replay_vcd = False
 if workdir is None:
     workdir = scyfile.split('.')[0]
 
@@ -151,7 +150,7 @@ if retcode:
 elif args.dump_common:
     sys.exit(0)
 
-if opt_replay_vcd:
+if scycfg.options.replay_vcd:
     # load top level design name back from generated model
     design_json = os.path.join(workdir, "common", "model", "design.json")
     with open(design_json, 'r') as f:
@@ -253,7 +252,7 @@ for task in scycfg.sequence.traverse():
                     # replay prior traces and enable only relevant cover
                     traces_script = []
                     for trace in task.traces:
-                        trace_scope = f" -scope {design_scope}" if opt_replay_vcd else ""
+                        trace_scope = f" -scope {design_scope}" if scycfg.options.replay_vcd else ""
                         traces_script.append(f"sim -w -r {trace}{trace_scope}")
                     if task.stmt == "cover":
                         traces_script.append(f"delete t:$cover a:hdlname=*{task.name} %d")
@@ -265,12 +264,12 @@ for task in scycfg.sequence.traverse():
                 print(body, file=sbyfile)
         task_trace = f"{task.get_tracestr()}.{trace_ext}"
     elif task.stmt == "append":
-        if opt_replay_vcd:
+        if scycfg.options.replay_vcd:
             raise NotImplementedError(f"replay_vcd option with append statement on line {task.line}")
         task.traces[-1] += f" -append {int(task.name):d}"
         task_steps[f"{task.get_linestr()}_{task.name}"] = int(task.name)
     elif task.stmt == "trace":
-        if opt_replay_vcd:
+        if scycfg.options.replay_vcd:
             raise NotImplementedError(f"replay_vcd option with trace statement on line {task.line}")
         if not task.is_leaf():
             raise NotImplementedError(f"trace statement has children on line {task.line}")
