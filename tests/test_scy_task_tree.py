@@ -9,41 +9,27 @@ def test_empty_tree():
     task_tree = TaskTree.from_string("")
     assert task_tree == None
 
-class TestMinimalTreeClass:
-    task_tree = TaskTree.from_string(dedent("""\
+@pytest.fixture
+def mintree() -> TaskTree:
+    return TaskTree.from_string(dedent("""\
         cover a:
             cover b:
                 cover c
             cover d
     """))
 
-    def test_mintree_exists(self):
-        assert self.task_tree
-    
-    def test_mintree_len4(self):
-        assert len(self.task_tree) == 4
+def test_mintree_exists(mintree):
+    assert mintree
 
-    def test_mintree_stmts(self):
-        stmts = get_tree_list(lambda x: x.stmt, self.task_tree)
-        assert stmts == ["cover"]*4
-
-    def test_mintree_names(self):
-        names = get_tree_list(lambda x: x.name, self.task_tree)
-        assert names == ["a", "b", "c", "d"]
-
-    def test_mintree_depths(self):
-        depths = get_tree_list(lambda x: x.depth, self.task_tree)
-        assert depths == [0, 1, 2, 1]
-
-    def test_mintree_root_or_leaf(self):
-        root_or_leaf = get_tree_list(lambda x: "root" if x.is_root 
-                                     else "leaf" if x.is_leaf
-                                     else "none", self.task_tree)
-        assert root_or_leaf == ["root", "none", "leaf", "leaf"]
-
-    def test_mintree_lines(self):
-        lines = get_tree_list(lambda x: x.line, self.task_tree)
-        assert lines == [0, 1, 2, 3]
+@pytest.mark.parametrize("xfunc,expected", [("x.stmt", ["cover"]*4),
+                                            ("x.name", ["a", "b", "c", "d"]),
+                                            ("x.depth", [0, 1, 2, 1]),
+                                            ("x.line", [0, 1, 2, 3]),
+                                            ("x.is_root", [True, False, False, False]),
+                                            ("x.is_leaf", [False, False, True, True]),
+                                            ("len(x)", [4, 2, 1, 1])])
+def test_mintree_vals(mintree: TaskTree, xfunc, expected: list):
+    assert get_tree_list(lambda x: eval(xfunc), mintree) == expected
 
 def test_enable_stmt():
     task_tree = TaskTree.from_string(dedent("""\
