@@ -69,6 +69,34 @@ class TaskTree:
         child.depth = self.depth
         child.reduce_depth(-1)
         return self
+    
+    def add_enable_cell(self, name: str, cell: "dict[str, str]"):
+        self.enable_cells[name] = cell
+
+    def add_or_update_enable_cell(self, name: str, cell: "dict[str, str]"):
+        try:
+            self.enable_cells[name].update(cell)
+        except KeyError:
+            return self.add_enable_cell(name, cell)
+
+    def update_enable_cells_from_parent(self, recurse=False):
+        for k, v in self.parent.enable_cells.items():
+            try:
+                self.enable_cells[k].update(v)
+            except KeyError:
+                self.enable_cells[k] = v.copy()
+        if recurse:
+            self.update_children_enable_cells(recurse)
+
+    def update_children_traces(self, task_trace: str):
+        for child in self.children:
+            child.traces.extend(self.traces)
+            if task_trace:
+                child.traces.append(task_trace)
+
+    def update_children_enable_cells(self, recurse=False):
+        for child in self.children:
+            child.update_enable_cells_from_parent(recurse)
 
     @property
     def is_root(self) -> bool:

@@ -127,3 +127,42 @@ def test_no_colon():
 
     assert len(task_tree) == 1
     assert task_tree.name == "a"
+
+@pytest.fixture
+def enable_tree():
+    a = TaskTree("a", "cover", 0)
+    b = TaskTree("cell", "enable", 1, asgmt="b")
+    c = TaskTree("c", "cover", 2, enable_cells={"b": {"lhs": "0"}})
+    d = TaskTree("d", "cover", 3, body="enable e\n")
+    a.add_child(b.add_child(c)).add_child(d)
+    return a
+
+def test_enable_tree_len(enable_tree):
+    tree_lens = get_tree_list(lambda x: len(x.enable_cells), enable_tree)
+    assert tree_lens == [0, 0, 1, 0]
+
+@pytest.fixture(params=[("test", {"val": "zero"}),
+                        ("b", {"rhs": "test"})])
+def enable_tree_with_cell(request, enable_tree: TaskTree):
+    name, cell = request.param
+    enable_tree.add_or_update_enable_cell(name, cell)
+    return (name, cell, enable_tree)
+
+def test_enable_tree_with_cell(enable_tree_with_cell):
+    name, enable_cell, enable_tree = enable_tree_with_cell
+    assert enable_tree.enable_cells.get(name) == enable_cell
+
+def test_enable_tree_with_cell_len(enable_tree_with_cell):
+    _, _, enable_tree = enable_tree_with_cell
+    tree_lens = get_tree_list(lambda x: len(x.enable_cells), enable_tree)
+    assert tree_lens == [1, 0, 1, 0]
+
+@pytest.mark.parametrize("recurse", [True, False])
+def test_update_children_enable_cells_len(enable_tree_with_cell, recurse):
+    name, _, enable_tree = enable_tree_with_cell
+    enable_tree.update_children_enable_cells(recurse)
+    tree_lens = get_tree_list(lambda x: len(x.enable_cells), enable_tree)
+    if name == "b" or not recurse:
+        assert tree_lens == [1, 1, 1, 1]
+    else:
+        assert tree_lens == [1, 1, 2, 1]

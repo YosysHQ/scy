@@ -216,12 +216,13 @@ for task in task_tree.traverse():
     task_trace = None
     if task.is_root:
         for name, vals in enable_cells.items():
+            task_cell = enable_cells[name].copy()
             if not vals.get("does_enable", False):
-                task.enable_cells[name] = enable_cells[name].copy()
-                task.enable_cells[name]["status"] = "enable"
+                task_cell["status"] = "enable"
+                task.add_enable_cell(name, task_cell)
             elif not vals.get("does_disable", False):
-                task.enable_cells[name] = enable_cells[name].copy()
-                task.enable_cells[name]["status"] = "disable"
+                task_cell["status"] = "disable"
+                task.add_enable_cell(name, task_cell)
 
     # each task has its own sby file
     if task.is_runnable:
@@ -330,26 +331,19 @@ for task in task_tree.traverse():
         make_deps[trace_list[0]] = f'{parent_dir}\n\tyosys-witness yw2yw {" ".join(traces)} $@'
     elif task.stmt == "add":
         add_cell = add_cells[task.line]
-        task.enable_cells[add_cell["cell"]] = add_cell
+        task.add_enable_cell(add_cell["cell"], add_cell)
         task.reduce_depth()
     elif task.stmt in ["enable", "disable"]:
-        if task.name not in task.enable_cells:
-            task.enable_cells[task.name] = enable_cells[task.name].copy()
-        task.enable_cells[task.name]["status"] = task.stmt
-        task.enable_cells[task.name]["line"] = task.line
+        task_cell = enable_cells[task.name].copy()
+        task_cell["status"] = task.stmt
+        task_cell["line"] = task.line
+        task.add_or_update_enable_cell(task.name, task_cell)
     else:
         raise NotImplementedError(f"unknown stament {task.stmt!r} on line {task.line}")
     
     # add traces to children
-    for child in task.children:
-        child.traces.extend(task.traces)
-        if task_trace:
-            child.traces.append(task_trace)
-        for k, v in task.enable_cells.items():
-            try:
-                child.enable_cells[k].update(v)
-            except KeyError:
-                child.enable_cells[k] = v.copy()
+    task.update_children_traces(task_trace)
+    task.update_children_enable_cells(recurse=False)
 
 # generate makefile
 makefile = os.path.join(workdir, "Makefile")
