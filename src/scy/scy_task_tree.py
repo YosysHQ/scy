@@ -12,7 +12,7 @@ def from_string(string: str, L0: int = 0, depth: int = 0) -> "TaskTree | None":
     # check for standalone body statements
     if d['stmt'] in ["enable", "disable"] and not d['body']:
         return None
-    
+
     line = L0 + d["ws"].count('\n')
 
     # otherwise continue recursively
@@ -20,16 +20,20 @@ def from_string(string: str, L0: int = 0, depth: int = 0) -> "TaskTree | None":
                     asgmt=d.get('asgmt', None))
     line += 1
 
-    body_str = m.group('body')
+    body_str = d['body']
     body_regex = r"(?P<ws>\s+).*?\n(?=(?P=ws)\S|$)"
     if body_str:
-        for m in re.finditer(body_regex, body_str, flags=re.DOTALL):
-            child = from_string(m.group(0), line, depth+1)
+        body_processed = False
+        for body_m in re.finditer(body_regex, body_str, flags=re.DOTALL):
+            body_processed = True
+            child = from_string(body_m.group(0), line)
             if child:
                 root.add_child(child)
             else:
-                root.body += m.group(0)
-            line += m.group(0).count('\n')
+                root.body += body_m.group(0)
+            line += body_m.group(0).count('\n')
+        if not body_processed:
+            root.body += d['body']
 
     return root
 
@@ -62,6 +66,8 @@ class TaskTree:
     def add_child(self, child: "TaskTree"):
         child.parent = self
         self.children.append(child)
+        child.depth = self.depth
+        child.reduce_depth(-1)
         return self
 
     @property

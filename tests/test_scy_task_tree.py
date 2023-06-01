@@ -46,6 +46,32 @@ def test_mintree_exists(mintree):
 def test_mintree_vals(mintree: TaskTree, xfunc, expected: list):
     assert get_tree_list(lambda x: eval(xfunc), mintree) == expected
 
+@pytest.mark.parametrize("amount,expected", [(1, [0, 0, 1, 0]),
+                                             (-1, [1, 2, 3, 2])])
+def test_mintree_reduce_depth(mintree: TaskTree, amount: int, expected: list):
+    mintree.reduce_depth(amount)
+    assert get_tree_list(lambda x: x.depth, mintree) == expected
+
+@pytest.mark.parametrize("input_str,stmt,name,asgmt,body", [
+        ("cover", None, None, None, None),
+        ("cover a", None, None, None, None),
+        ("cover a:\n", "cover", "a", None, ""),
+        ("cover b:\nbody", "cover", "b", None, "body"),
+        ("cover c\n", "cover", "c", None, ""),
+        ("enable cell d e f:\nbody\n", "enable", "cell", "d e f", "body\n"),
+        ("cover g:\n body\n cover h", "cover", "g", None, " body\n"),
+])
+def test_task_from_string(input_str, stmt, name, asgmt, body):
+    task_tree = TaskTree.from_string(input_str)
+    if stmt:
+        assert task_tree
+        assert task_tree.stmt == stmt
+        assert task_tree.name == name
+        assert task_tree.asgmt == asgmt
+        assert task_tree.body == body
+    else:
+        assert not task_tree
+
 def test_enable_stmt():
     task_tree = TaskTree.from_string(dedent("""\
         cover a:
