@@ -70,14 +70,15 @@ def sby_body_append(body: str, append: "str | list[str]"):
     return body
 
 # dump sby config options out
-sbycfg = {"options": scycfg.sby_options,
+sbycfg = {"options": scycfg.options.sby_options,
           "script": scycfg.design,
-          "files": scycfg.files,
           "engines": scycfg.engines
 }
 
-for name, body in scycfg.file.items():
-    sbycfg[f"file {name}"] = body
+for sect in scycfg.fallback:
+    name = sect.name
+    if sect.arguments: name += f" {sect.arguments}"
+    sbycfg[name] = sect.contents
 
 if sbycfg["files"]:
     newbody = ""

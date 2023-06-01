@@ -5,10 +5,8 @@ prep -flatten -nordff -top rvfi_testbench
 # remove testbench init assumption 
 delete c:$assume$rvfi_testbench.sv*
 
-[sby_options]
-depth 10
-
 [options]
+depth 10
 replay_vcd off
 
 [sequence]
