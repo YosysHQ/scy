@@ -9,25 +9,40 @@ def test_empty_tree():
     task_tree = TaskTree.from_string("")
     assert task_tree == None
 
-@pytest.fixture
-def mintree() -> TaskTree:
-    return TaskTree.from_string(dedent("""\
-        cover a:
-            cover b:
-                cover c
-            cover d
-    """))
+@pytest.fixture(params=["from_string", "constructed"])
+def mintree(request) -> TaskTree:
+    if request.param == "from_string":
+        return TaskTree.from_string(dedent("""\
+            cover a:
+                cover b:
+                    cover c:
+                cover d
+        """))
+    elif request.param == "constructed":
+        a = TaskTree("a", "cover", 0)
+        b = TaskTree("b", "cover", 1)
+        c = TaskTree("c", "cover", 2)
+        d = TaskTree("d", "cover", 3)
+        a.add_child(b.add_child(c)).add_child(d)
+        return a
+    else:
+        return None
 
 def test_mintree_exists(mintree):
     assert mintree
 
-@pytest.mark.parametrize("xfunc,expected", [("x.stmt", ["cover"]*4),
-                                            ("x.name", ["a", "b", "c", "d"]),
-                                            ("x.depth", [0, 1, 2, 1]),
-                                            ("x.line", [0, 1, 2, 3]),
-                                            ("x.is_root", [True, False, False, False]),
-                                            ("x.is_leaf", [False, False, True, True]),
-                                            ("len(x)", [4, 2, 1, 1])])
+@pytest.mark.parametrize("xfunc,expected", [
+        ("x.stmt", ["cover"]*4),
+        ("x.name", ["a", "b", "c", "d"]),
+        ("x.depth", [0, 1, 2, 1]),
+        ("x.line", [0, 1, 2, 3]),
+        ("x.is_root", [True, False, False, False]),
+        ("x.is_leaf", [False, False, True, True]),
+        ("len(x)", [4, 2, 1, 1]),
+        ("len(x.children)", [2, 1, 0, 0]),
+        ("len(list(x.traverse()))", [4, 2, 1, 1]),
+        ("x.is_runnable", [True]*4)
+])
 def test_mintree_vals(mintree: TaskTree, xfunc, expected: list):
     assert get_tree_list(lambda x: eval(xfunc), mintree) == expected
 
