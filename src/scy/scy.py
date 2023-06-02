@@ -4,6 +4,8 @@ import json
 import shutil
 import subprocess
 from scy_task_tree import TaskTree
+from scy_config_parser import SCYConfig
+from yosys_mau import source_str
 
 parser = argparse.ArgumentParser(prog="scy")
 
@@ -30,23 +32,16 @@ parser.add_argument('scyfile', metavar="<jobname>.scy",
 args = parser.parse_args()
 scyfile = args.scyfile
 workdir = args.workdir
-opt_replay_vcd = False
 if workdir is None:
     workdir = scyfile.split('.')[0]
 
 # parse scy file
-with open(scyfile, 'r') as f:
-    scydata = f.read()
+scy_source = source_str.read_file(scyfile)
 
-stmt_regex = r"(?:^|\n)\[(?P<name>.*)\]\n(?P<body>(?:\n?.*)*?(?=\n\[|$))"
-sections = re.finditer(stmt_regex, scydata)
-scycfg = { m['name']:m['body'] for m in sections }
-
-start_index = scydata.split('\n').index("[sequence]") + 2
-task_tree = TaskTree.from_string(scycfg["sequence"], L0 = start_index)
+scycfg = SCYConfig(scy_source)
 
 if args.dump_tree:
-    print(task_tree)
+    print(scycfg.sequence)
     sys.exit(0)
 
 # generate workdir
@@ -74,37 +69,25 @@ def sby_body_append(body: str, append: "str | list[str]"):
     body += '\n'.join(append)
     return body
 
-# default assignments
-sbycfg = {"engines": "smtbmc boolector", 
-          "files": ""}
-for (name, body) in scycfg.items():
-    if name in ["sequence"]: 
-        # skip any scy specific sections
-        continue
-    elif name == "options": 
-        # remove any scy specific options
-        newbody = ""
-        for line in body.split('\n'):
-            if line:
-                key, val = line.split(maxsplit=1)
-                if key == "replay_vcd":
-                    opt_replay_vcd = val == "on"
-                else:
-                    newbody += line + '\n'
-        body = newbody
-    elif name == "design":
-        # rename design to script
-        name = "script"
-    elif name == "files":
-        # correct relative paths for extra level of depth
-        newbody = ""
-        for line in body.split('\n'):
-            if line:
-                if not os.path.isabs(line):
-                    line = os.path.join("..", line)
-                newbody += line + '\n'
-        body = newbody
-    sbycfg[name] = body
+# dump sby config options out
+sbycfg = {"options": scycfg.options.sby_options,
+          "script": scycfg.design,
+          "engines": scycfg.engines
+}
+
+for sect in scycfg.fallback:
+    name = sect.name
+    if sect.arguments: name += f" {sect.arguments}"
+    sbycfg[name] = sect.contents
+
+if sbycfg["files"]:
+    newbody = ""
+    for line in sbycfg["files"].split('\n'):
+        if line:
+            if not os.path.isabs(line):
+                line = os.path.join("..", line)
+            newbody += line + '\n'
+    sbycfg["files"] = newbody
 
 # preparse tree to extract cell generation
 add_cells: "dict[int, dict[str]]" = {}
@@ -113,7 +96,7 @@ def add_enable_cell(hdlname: str, stmt: str):
     enable_cells.setdefault(hdlname, {"disable": "1'b0"})
     enable_cells[hdlname][f"does_{stmt}"] = True
 
-for task in task_tree.traverse():
+for task in scycfg.sequence.traverse():
     if task.stmt == "add":
         if task.name not in ["assert", "assume", "live", "fair", "cover"]:
             raise NotImplementedError(f"cell type {task.name!r} on line {task.line}")
@@ -168,7 +151,7 @@ if retcode:
 elif args.dump_common:
     sys.exit(0)
 
-if opt_replay_vcd:
+if scycfg.options.replay_vcd:
     # load top level design name back from generated model
     design_json = os.path.join(workdir, "common", "model", "design.json")
     with open(design_json, 'r') as f:
@@ -212,7 +195,7 @@ for key in list(sbycfg.keys()):
 make_all = []
 make_deps = {}
 task_steps = {}
-for task in task_tree.traverse():
+for task in scycfg.sequence.traverse():
     task_trace = None
     if task.is_root:
         for name, vals in enable_cells.items():
@@ -271,7 +254,7 @@ for task in task_tree.traverse():
                     # replay prior traces and enable only relevant cover
                     traces_script = []
                     for trace in task.traces:
-                        trace_scope = f" -scope {design_scope}" if opt_replay_vcd else ""
+                        trace_scope = f" -scope {design_scope}" if scycfg.options.replay_vcd else ""
                         traces_script.append(f"sim -w -r {trace}{trace_scope}")
                     if task.stmt == "cover":
                         traces_script.append(f"delete t:$cover a:hdlname=*{task.name} %d")
@@ -283,12 +266,12 @@ for task in task_tree.traverse():
                 print(body, file=sbyfile)
         task_trace = f"{task.tracestr}.{trace_ext}"
     elif task.stmt == "append":
-        if opt_replay_vcd:
+        if scycfg.options.replay_vcd:
             raise NotImplementedError(f"replay_vcd option with append statement on line {task.line}")
         task.traces[-1] += f" -append {int(task.name):d}"
         task_steps[f"{task.linestr}_{task.name}"] = int(task.name)
     elif task.stmt == "trace":
-        if opt_replay_vcd:
+        if scycfg.options.replay_vcd:
             raise NotImplementedError(f"replay_vcd option with trace statement on line {task.line}")
         if not task.is_leaf:
             raise NotImplementedError(f"trace statement has children on line {task.line}")
@@ -385,7 +368,7 @@ task_steps.update({m['task']:int(m['step']) for m in log_matches})
 # output stats
 trace_tasks = []
 print("Chunks:")
-for task in task_tree.traverse():
+for task in scycfg.sequence.traverse():
     if task.stmt == "trace":
         trace_tasks.append(task)
     if task.stmt not in ["append", "cover"]:

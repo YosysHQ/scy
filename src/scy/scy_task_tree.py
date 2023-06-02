@@ -1,7 +1,8 @@
-import re
 from typing import Iterable
+from yosys_mau import source_str
+from yosys_mau.source_str import re
 
-def from_string(string: str, L0: int = 0, depth: int = 0) -> "TaskTree | None":
+def from_string(string: source_str, L0: int = 0, depth: int = 0) -> "TaskTree | None":
     stmt_regex = r"^(?P<ws>\s*)(?P<stmt>cover|append|trace|add|disable|enable) "\
                  r"(?P<name>\S+?)( (?P<asgmt>.*?)|)(:\n(?P<body>.*)|\n)"
     m = re.search(stmt_regex, string, flags=re.DOTALL)
@@ -13,12 +14,19 @@ def from_string(string: str, L0: int = 0, depth: int = 0) -> "TaskTree | None":
     if d['stmt'] in ["enable", "disable"] and not d['body']:
         return None
 
-    line = L0 + d["ws"].count('\n')
+    # if we're dealing with a source_str we can get the source line directly from it
+    source_map = source_str.source_map(m.string)
+    if source_map:
+        span = source_map.spans[0]
+        start_line, _ = span.file.text_position(span.file_start)
+        line = start_line
+    else:
+        line = L0 + d["ws"].count('\n')
 
     # otherwise continue recursively
     root = TaskTree(name=d['name'], stmt=d['stmt'], line=line, depth=depth,
                     asgmt=d.get('asgmt', None))
-    line += 1
+    if not source_map: line += 1
 
     body_str = d['body']
     body_regex = r"(?P<ws>\s+).*?\n(?=(?P=ws)\S|$)"
@@ -31,7 +39,7 @@ def from_string(string: str, L0: int = 0, depth: int = 0) -> "TaskTree | None":
                 root.add_child(child)
             else:
                 root.body += body_m.group(0)
-            line += body_m.group(0).count('\n')
+            if not source_map: line += body_m.group(0).count('\n')
         if not body_processed:
             root.body += d['body']
 
