@@ -27,12 +27,12 @@ cover checker_inst.cp_reset_done:
                 trace hpm_event3_2
 
 [files]
-../../../riscv-formal/checks/rvfi_macros.vh
-../../../riscv-formal/checks/rvfi_channel.sv
-../../../riscv-formal/checks/rvfi_testbench.sv
-../../../riscv-formal/checks/rvfi_cover_check.sv
-../../../riscv-formal/cores/nerv/wrapper.sv 
-../../../riscv-formal/cores/nerv/nerv.sv
+checks/rvfi_macros.vh
+checks/rvfi_channel.sv
+checks/rvfi_testbench.sv
+checks/rvfi_cover_check.sv
+nerv/wrapper.sv 
+nerv/nerv.sv
 cover_stmts.vh
 
 [file defines.sv]
