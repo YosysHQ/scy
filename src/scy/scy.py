@@ -260,7 +260,7 @@ for task in scycfg.sequence.traverse():
                         trace_scope = f" -scope {design_scope}" if scycfg.options.replay_vcd else ""
                         traces_script.append(f"sim -w -r {trace}{trace_scope}")
                     if task.stmt == "cover":
-                        traces_script.append(f"delete t:$cover a:hdlname=*{task.name} %d")
+                        traces_script.append(f"delete t:$cover c:{task.name} %d")
                         body = sby_body_append(body, traces_script)
                     else:
                         raise NotImplementedError(task.stmt)
@@ -376,13 +376,18 @@ for task in scycfg.sequence.traverse():
         trace_tasks.append(task)
     if task.stmt not in ["append", "cover"]:
         continue
-    task.steps = task_steps[f"{task.linestr}_{task.name}"]
+    try:
+        task.steps = task_steps[f"{task.linestr}_{task.name}"]
+    except KeyError:
+        print(f"No trace for {task.name} on line {task.line}, exiting.")
+        sys.exit(1)
     chunk_str = " "*task.depth + f"L{task.line}"
     cycles_str = f"{task.start_cycle:2} .. {task.stop_cycle:2}"
     task_str = task.name if task.is_runnable else f"{task.stmt} {task.name}"
     print(f"  {chunk_str:6}  {cycles_str}  =>  {task.steps:2}  {task_str}")
 
-print("\nTraces:")
+if trace_tasks:
+    print("\nTraces:")
 for task in trace_tasks:
     cycles_str = f"{task.stop_cycle + 1:>2} cycles"
     chunks = task.parent.get_all_linestr()
