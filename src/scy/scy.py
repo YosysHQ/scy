@@ -1,8 +1,11 @@
+#!/usr/bin/env python3
+
 import os, sys, re
 import argparse
 import json
 import shutil
 import subprocess
+##yosys-sys-path##
 from scy_task_tree import TaskTree
 from scy_config_parser import SCYConfig
 from yosys_mau import source_str
