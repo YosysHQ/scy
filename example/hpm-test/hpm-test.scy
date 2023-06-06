@@ -10,20 +10,20 @@ depth 10
 replay_vcd off
 
 [sequence]
-cover cp_reset_done:
+cover checker_inst.cp_reset_done:
     disable checker_inst.ap_noreset
     trace reset
-    cover cp_hpmcounter
-    cover cp_hpmevent2:
-        cover cp_hpmcounter:
+    cover checker_inst.cp_hpmcounter
+    cover checker_inst.cp_hpmevent2:
+        cover checker_inst.cp_hpmcounter:
                 trace hpm_event2
 
-    cover cp_hpmevent3:
-        cover cp_hpmcounter:
+    cover checker_inst.cp_hpmevent3:
+        cover checker_inst.cp_hpmcounter:
             enable checker_inst.ap_nowrite
             trace hpm_event3
         append -3:
-            cover cp_hpmcounter:
+            cover checker_inst.cp_hpmcounter:
                 trace hpm_event3_2
 
 [files]
