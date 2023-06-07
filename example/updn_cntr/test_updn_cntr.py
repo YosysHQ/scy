@@ -92,26 +92,23 @@ def scy_cfg(scy_dir, base_cfg: "dict[str, list[str]]", sequence, cover_stmts):
             f.write("\n\n")
     return cfg
 
-# Not sure how to solve this without requiring scy to be installed
 @pytest.fixture(scope="class")
-def scy_args(scy_cfg):
-    args = ["scy", scy_cfg]
-    return args
-
-@pytest.fixture(scope="class")
-def scy_exec(scy_dir, scy_args) -> subprocess.CompletedProcess:
-    return subprocess.run(scy_args, cwd=scy_dir, capture_output=True)
+def cmd_args():
+    return []
 
 @pytest.mark.parametrize("test", [
-        {"name": "pass", "data": ["1", " 2", "  3"], "failure": None},
+        {"name": "pass", "data": ["1", " 2", "  3"], "chunks": [1, 1, 1]},
+        {"name": "chunks", "data": ["2", " 7", "  9", "  6"], "chunks": [2, 5, 2, 1]},
+        {"name": "chunks_reset", "data": ["6", " 3", "  2", " 2"], "chunks": [6, 3, 1, 3]},
         {"name": "fail_depth", "data": ["1", " 2", "  3", "  44"], "failure": "sby"},
         {"name": "fail_data", "data": [], "failure": "scy"},
 ], scope="class")
 class TestExecClass:
     def test_runs(self, test: "dict[str]", scy_exec: subprocess.CompletedProcess):
-        if test["failure"] == "sby":
+        failure = test.get("failure")
+        if failure == "sby":
             assert scy_exec.returncode
-        elif test["failure"] == "scy":
+        elif failure == "scy":
             assert scy_exec.returncode
         else:
             scy_exec.check_returncode()
@@ -129,3 +126,7 @@ class TestExecClass:
                     found_match = True
                     break
             assert found_match, f"{match_str} not found in {output_files}"
+
+    def test_chunks(self, test: "dict[str]", scy_chunks: "list[int]"):
+        if test.get("chunks"):
+            assert scy_chunks == test["chunks"]
