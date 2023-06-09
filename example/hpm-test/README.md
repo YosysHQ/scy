@@ -8,16 +8,6 @@ by the verification framework.  [`cover_stmts.vh`](cover_stmts.vh) provides a mo
 a number of cover statements and assumptions to facilitate testing that a given event will allow the
 counter to increment at some point.
 
-## Requirements
-
-The `riscv-formal` project must be in the same directory as `scy`.
-
-```
-cd scy
-cd ..
-git clone git@github.com:YosysHQ/riscv-formal.git riscv-formal
-```
-
 ## Running the example
 
 `scy hpm-test.scy`
