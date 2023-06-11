@@ -2,6 +2,7 @@
 
 import os, sys, re
 import argparse
+import asyncio
 import json
 import shutil
 import subprocess
@@ -9,6 +10,7 @@ import subprocess
 from scy_task_tree import TaskTree
 from scy_config_parser import SCYConfig
 from yosys_mau import source_str
+import yosys_mau.task_loop.job_server as job
 
 parser = argparse.ArgumentParser(prog="scy")
 
@@ -140,16 +142,36 @@ with open(task_sby, 'w') as sbyfile:
                 add_log = os.path.join(workdir, "common", "src", add_log)
         print(f"[{name}]", file=sbyfile)
         print(body, file=sbyfile)
+
+client = job.Client(args.jobcount)
+
+def read_pipe(pipe: asyncio.StreamReader):
+    result = asyncio.run(pipe.read())
+    return bytes.decode(result)
+
+async def runner(client: job.Client, exe_args: "list[str]"):
+    lease = client.request_lease()
+    await lease
+
+    coro = await asyncio.create_subprocess_exec(
+        *exe_args, cwd=workdir, 
+        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+    )
+    await coro.wait()
+
+    del lease
+    return coro
+
 retcode = 0
 sby_args = ["sby", "common.sby"]
 print(f'Running "{" ".join(sby_args)}"')
-p = subprocess.run(sby_args, cwd=workdir, capture_output=True)
+p = asyncio.run(runner(client, sby_args))
 retcode = p.returncode
 
 if retcode:
     sby_logfile = os.path.join(workdir, 'common', 'logfile.txt')
     print(f"Something went wrong!  Check {sby_logfile} for more info")
-    print(str(p.stderr, encoding="utf-8"))
+    print(read_pipe(p.stderr))
     sys.exit(retcode)
 elif args.dump_common:
     sys.exit(0)
