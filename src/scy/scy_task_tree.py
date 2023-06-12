@@ -140,9 +140,13 @@ class TaskTree:
         else:
             return linestr + self.parent.get_all_linestr()
     
+    @property
+    def dir(self) -> str:
+        return f"{self.linestr}_{self.name}"
+
     def get_dir(self) -> str:
         if self.is_runnable:
-            return f"{self.linestr}_{self.name}"
+            return self.dir
         else:
             return self.parent.get_dir()
 

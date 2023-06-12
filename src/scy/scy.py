@@ -5,7 +5,6 @@ import argparse
 import asyncio
 import json
 import shutil
-import subprocess
 ##yosys-sys-path##
 from scy_task_tree import TaskTree
 from scy_config_parser import SCYConfig
@@ -146,7 +145,10 @@ with open(task_sby, 'w') as sbyfile:
 client = job.Client(args.jobcount)
 
 def read_pipe(pipe: asyncio.StreamReader):
-    result = asyncio.run(pipe.read())
+    return asyncio.run(read_pipe_async(pipe))
+
+async def read_pipe_async(pipe: asyncio.StreamReader):
+    result = await pipe.read()
     return bytes.decode(result)
 
 async def runner(client: job.Client, exe_args: "list[str]"):
@@ -217,8 +219,6 @@ for key in list(sbycfg.keys()):
     if "file " in key:
         sbycfg.pop(key)
 
-make_all = []
-make_deps = {}
 task_steps = {}
 for task in scycfg.sequence.traverse():
     task_trace = None
@@ -234,10 +234,8 @@ for task in scycfg.sequence.traverse():
 
     # each task has its own sby file
     if task.is_runnable:
-        task_dir = f"{task.linestr}_{task.name}"
-        make_all.append(task_dir)
         task_sby = os.path.join(f"{workdir}", 
-                                f"{task_dir}.sby")
+                                f"{task.dir}.sby")
         print(f"Generating {task_sby}")
         with open(task_sby, 'w') as sbyfile:
             for (name, body) in sbycfg.items():
@@ -245,7 +243,6 @@ for task in scycfg.sequence.traverse():
                     # child nodes depend on parent
                     parent = task.parent
                     parent_dir = task.parent.get_dir()
-                    make_deps[task_dir] = parent_dir
                     if name == "files":
                         parent_yw = os.path.join(parent_dir,
                                                 "engine_0",
@@ -302,41 +299,6 @@ for task in scycfg.sequence.traverse():
             raise NotImplementedError(f"trace statement has children on line {task.line}")
         if task.is_root:
             raise NotImplementedError(f"trace statement is root on line {task.line}")
-
-        trace_list = [f"{task.name}.{ext}" for ext in ["yw", "vcd"]]
-        make_all += trace_list
-        
-        parent_dir = task.parent.get_dir()
-        # reversing trace order means that the most recent trace will be first
-        task.traces.reverse()
-        traces = []
-        last_trace = True
-        for trace in task.traces:
-            split_trace = trace.split(maxsplit=1)
-            if len(split_trace) == 2:
-                trace, append = split_trace
-                append = int(append.split()[-1])
-            else:
-                append = 0
-            if last_trace:
-                last_trace = False
-                trace_path = os.path.join(parent_dir,
-                                          "engine_0",
-                                          "trace0.yw")
-            else:
-                # using sim -w appears to combine the final step of one trace with the first step of the next
-                # we emulate this by telling yosys-witness to skip one extra cycle than we told sim
-                append -= 1
-                trace_path = os.path.join(parent_dir,
-                                          "src", 
-                                          trace)
-            traces.append(f"{trace_path} -p {append}")
-
-        # we now need to flip the order back to the expected order
-        task.traces.reverse()
-        traces.reverse()
-        make_deps[trace_list[1]] = trace_list[0]
-        make_deps[trace_list[0]] = f'{parent_dir}\n\tyosys-witness yw2yw {" ".join(traces)} $@'
     elif task.stmt == "add":
         add_cell = add_cells[task.line]
         task.add_enable_cell(add_cell["cell"], add_cell)
@@ -353,37 +315,78 @@ for task in scycfg.sequence.traverse():
     task.update_children_traces(task_trace)
     task.update_children_enable_cells(recurse=False)
 
-# generate makefile
-makefile = os.path.join(workdir, "Makefile")
-print(f"Generating {makefile}")
-with open(makefile, "w") as mk:
-    print(f"all: {' '.join(make_all)}", file=mk)
-    print("%:%.sby\n\tsby -f $<", file=mk)
-    print(f"%.vcd: %.yw\n\tyosys -p 'read_rtlil {common_il}; sim -hdlname -r $< -vcd $@'", file=mk)
-    for (task, dep) in make_deps.items():
-        print(f"{task}: {dep}", file=mk)
-
 if args.setupmode:
     sys.exit(0)
 
-# run makefile
-retcode = 0
-make_args = ["make"]
-if args.jobcount:
-    make_args.append(f"-j{args.jobcount}")
-make_args += ["-C", workdir]
-print(f'Running "{" ".join(make_args)}"')
-p = subprocess.run(make_args, capture_output=True)
-retcode = p.returncode
-make_log = str(p.stdout, encoding="utf-8")
+# execute task tree
+async def tree_runner(client: job.Client, task: TaskTree):
+    p = []
+    # run self
+    if task.is_runnable:
+        sby_args = ["sby", "-f", f"{task.dir}.sby"]
+        p.append(await runner(client, sby_args))
+    elif task.stmt == "trace":
+        # reversing trace order means that the most recent trace will be first
+        task.traces.reverse()
+        traces = []
+        last_trace = True
+        for trace in task.traces:
+            split_trace = trace.split(maxsplit=1)
+            if len(split_trace) == 2:
+                trace, append = split_trace
+                append = int(append.split()[-1])
+            else:
+                append = 0
+            if last_trace:
+                last_trace = False
+                trace_path = os.path.join(task.get_dir(),
+                                          "engine_0",
+                                          "trace0.yw")
+            else:
+                # using sim -w appears to combine the final step of one trace with the first step of the next
+                # we emulate this by telling yosys-witness to skip one extra cycle than we told sim
+                append -= 1
+                trace_path = os.path.join(task.get_dir(),
+                                          "src", 
+                                          trace)
+            traces.append(f"{trace_path} -p {append}")
 
-with open(makefile + ".log", 'w') as f:
-    print(make_log, file=f)
+        # we now need to flip the order back to the expected order
+        task.traces.reverse()
+        traces.reverse()
 
-if retcode:
-    print(f"Something went wrong!  Check {makefile}.log for more info")
-    print(str(p.stderr, encoding="utf-8"))
-    sys.exit(retcode)
+        # run yosys-witness to concatenate all traces
+        yw_args = ["yosys-witness", "yw2yw"]
+        for trace in traces:
+            yw_args.extend(trace.split())
+
+        # now use yosys to replay trace and generate vcd
+        yw_args.append(f"{task.name}.yw")
+        p.append(await runner(client, yw_args))
+        yosys_args = [
+            "yosys", "-p", 
+            f"read_rtlil {common_il}; sim -hdlname -r {task.name}.yw -vcd {task.name}.vcd"
+        ]
+        p.append(await runner(client, yosys_args))
+
+    # run children
+    children = await asyncio.gather(
+        *[tree_runner(client, child) for child in task.children]
+    )
+    for child in children:
+        p.extend(child)
+
+    return p
+
+p_all = asyncio.run(tree_runner(client, scycfg.sequence))
+
+make_log = ""
+for p in p_all:
+    retcode = p.returncode
+    if retcode:
+        print(read_pipe(p.stderr))
+        sys.exit(retcode)
+    make_log += read_pipe(p.stdout)
 
 # parse sby runs
 log_regex = r"^.*\[(?P<task>.*)\].*(?:reached).*step (?P<step>\d+)$"
