@@ -115,8 +115,16 @@ class TaskTree:
         return not self.children
     
     @property
-    def is_runnable(self) -> bool:
+    def uses_sby(self) -> bool:
         return self.stmt in ["cover"]
+
+    @property
+    def makes_dir(self) -> bool:
+        return self.uses_sby
+
+    @property
+    def is_runnable(self) -> bool:
+        return self.stmt in ["cover", "trace"]
     
     @property
     def has_local_enable_cells(self) -> bool:
@@ -124,7 +132,7 @@ class TaskTree:
     
     @property
     def tracestr(self) -> str:
-        if self.is_runnable:
+        if self.uses_sby:
             return f"trace{self.line:03d}"
         else:
             return self.parent.tracestr
@@ -145,7 +153,7 @@ class TaskTree:
         return f"{self.linestr}_{self.name}"
 
     def get_dir(self) -> str:
-        if self.is_runnable:
+        if self.makes_dir:
             return self.dir
         else:
             return self.parent.get_dir()
