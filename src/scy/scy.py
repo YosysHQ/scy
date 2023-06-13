@@ -8,6 +8,7 @@ import shutil
 ##yosys-sys-path##
 from scy_task_tree import TaskTree
 from scy_config_parser import SCYConfig
+from scy_sby_bridge import SBYBridge
 from yosys_mau import source_str
 import yosys_mau.task_loop.job_server as job
 
@@ -74,24 +75,17 @@ def sby_body_append(body: str, append: "str | list[str]"):
     return body
 
 # dump sby config options out
-sbycfg = {"options": scycfg.options.sby_options,
-          "script": scycfg.design,
-          "engines": scycfg.engines
-}
+sbycfg = SBYBridge()
+sbycfg.add_section("options", scycfg.options.sby_options)
+sbycfg.add_section("script", scycfg.design)
+sbycfg.add_section("engines", scycfg.engines)
 
 for sect in scycfg.fallback:
     name = sect.name
     if sect.arguments: name += f" {sect.arguments}"
-    sbycfg[name] = sect.contents
+    sbycfg.add_section(name, sect.contents)
 
-if sbycfg["files"]:
-    newbody = ""
-    for line in sbycfg["files"].split('\n'):
-        if line:
-            if not os.path.isabs(line):
-                line = os.path.join("..", line)
-            newbody += line + '\n'
-    sbycfg["files"] = newbody
+sbycfg.fix_relative_paths("..")
 
 # preparse tree to extract cell generation
 add_cells: "dict[int, dict[str]]" = {}
@@ -117,30 +111,26 @@ for task in scycfg.sequence.traverse():
             if stmt in ["enable", "disable"]:
                 add_enable_cell(hdlname, stmt)
 
+# add cells to sby script
+add_log = None
+for (line, cell) in add_cells.items():
+    body = sby_body_append(body, [f"add -{cell['type']} {cell['lhs']} # line {line}",
+                                    f"setattr -set scy_line {line}  w:{cell['lhs']} %co c:$auto$add* %i"])
+for hdlname in enable_cells.keys():
+    select = f"w:*:*_EN c:{hdlname} %ci:+[EN] %i"
+    body = sby_body_append(body, f"setattr -set scy_line 0 -set hdlname:{hdlname} 1 {select}")
+if add_cells or enable_cells:
+    add_log = "add_cells.log"
+    body = sby_body_append(body, f"tee -o {add_log} printattrs a:scy_line")
+    add_log = os.path.join(workdir, "common", "src", add_log)
+
 # use sby to prepare input
 print(f"Preparing input files")
 task_sby = os.path.join(f"{workdir}", 
                         f"common.sby")
-add_log = None
+
 with open(task_sby, 'w') as sbyfile:
-    for (name, body) in sbycfg.items():
-        if name in "engines":
-            continue
-        elif name == "options":
-            body = sby_body_append(body, "mode prep")
-        if name == "script":
-            for (line, cell) in add_cells.items():
-                body = sby_body_append(body, [f"add -{cell['type']} {cell['lhs']} # line {line}",
-                                              f"setattr -set scy_line {line}  w:{cell['lhs']} %co c:$auto$add* %i"])
-            for hdlname in enable_cells.keys():
-                select = f"w:*:*_EN c:{hdlname} %ci:+[EN] %i"
-                body = sby_body_append(body, f"setattr -set scy_line 0 -set hdlname:{hdlname} 1 {select}")
-            if add_cells or enable_cells:
-                add_log = "add_cells.log"
-                body = sby_body_append(body, f"tee -o {add_log} printattrs a:scy_line")
-                add_log = os.path.join(workdir, "common", "src", add_log)
-        print(f"[{name}]", file=sbyfile)
-        print(body, file=sbyfile)
+    sbycfg.dump_common(sbyfile)
 
 client = job.Client(args.jobcount)
 
@@ -208,16 +198,8 @@ if add_log:
                         add_cells[line]["cell"] = cell
 
 # modify config for full sby runs
-sbycfg["options"] = sby_body_append(
-        sbycfg["options"], ["mode cover", 
-                            "expect pass",
-                            "skip_prep on"])
-sbycfg["script"] = sby_body_append("", ["read_rtlil common_design.il"])
 common_il = os.path.join('common', 'model', 'design_prep.il')
-sbycfg["files"] = sby_body_append("", [f"common_design.il {common_il}"])
-for key in list(sbycfg.keys()):
-    if "file " in key:
-        sbycfg.pop(key)
+sbycfg.prep_shared(common_il)
 
 task_steps = {}
 for task in scycfg.sequence.traverse():
@@ -238,7 +220,8 @@ for task in scycfg.sequence.traverse():
                                 f"{task.dir}.sby")
         print(f"Generating {task_sby}")
         with open(task_sby, 'w') as sbyfile:
-            for (name, body) in sbycfg.items():
+            for (name, body) in sbycfg.data.items():
+                body = "\n".join(body)
                 if not task.is_root:
                     # child nodes depend on parent
                     parent = task.parent
