@@ -2,15 +2,20 @@ import os
 
 class SBYBridge():
     def __init__(self, data: "dict[str, list[str]]" = {}):
-        self.data = data
+        self.data = {}
+        for (name, contents) in data.items():
+            self.add_section(name, contents)
 
     def add_section(self, name: str, contents: "str | list[str]"):
         if isinstance(contents, str):
             contents = contents.splitlines()
-        self.data[name] = contents
+        try:
+            self.data[name] = list(contents)
+        except TypeError:
+            self.data[name] = []
 
     @property
-    def options(self):
+    def options(self) -> "list[str]":
         return self.data["options"]
 
     @options.setter
@@ -18,7 +23,7 @@ class SBYBridge():
         self.add_section("options", contents)
 
     @property
-    def script(self):
+    def script(self) -> "list[str]":
         return self.data["script"]
 
     @script.setter
@@ -26,7 +31,7 @@ class SBYBridge():
         self.add_section("script", contents)
 
     @property
-    def files(self):
+    def files(self) -> "list[str]":
         return self.data["files"]
 
     @files.setter
