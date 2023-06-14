@@ -1,3 +1,4 @@
+from argparse import Namespace
 from yosys_mau.config_parser import (
     BoolValue,
     ConfigOptions,
@@ -34,3 +35,7 @@ class SCYConfig(ConfigParser):
     design = StrSection(default="")
     engines = StrSection(default="smtbmc boolector\n")
     fallback = RawSection(all_sections=True)
+
+    def __init__(self, contents: str) -> None:
+        super().__init__(contents)
+        self.args: Namespace = None

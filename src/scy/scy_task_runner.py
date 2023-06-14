@@ -75,20 +75,21 @@ def gen_sby(task: TaskTree, sbycfg: SBYBridge, scycfg: SCYConfig,
     return sbycfg
 
 class TaskRunner():
-    def __init__(self, sbycfg: SBYBridge, scycfg: SCYConfig, client: job.Client, workdir: str,
+    def __init__(self, sbycfg: SBYBridge, scycfg: SCYConfig, client: job.Client,
                  add_cells: "dict[int, dict[str]]" = {}, 
                  enable_cells: "dict[str, dict[str, str | bool]]" = {}):
         self.sbycfg = sbycfg
         self.scycfg = scycfg
         self.client = client
-        self.workdir = workdir
         self.add_cells = add_cells
         self.enable_cells = enable_cells
         self.task_steps = {}
 
-    async def run_task(self, task: TaskTree, recurse=True, setupmode=False):
+    async def run_task(self, task: TaskTree, recurse=True):
         p = []
         task_trace = None
+        workdir = self.scycfg.args.workdir
+        setupmode = self.scycfg.args.setupmode
         # initialise root task with enable cells
         if task.is_root:
             for name, vals in self.enable_cells.items():
@@ -104,7 +105,7 @@ class TaskRunner():
             # generate sby
             taskcfg = gen_sby(task, copy.deepcopy(self.sbycfg), self.scycfg,
                               self.add_cells, self.enable_cells)
-            task_sby = os.path.join(f"{self.workdir}", 
+            task_sby = os.path.join(f"{workdir}", 
                                     f"{task.dir}.sby")
             print(f"Generating {task_sby}")
             with open(task_sby, 'w') as sbyfile:
@@ -113,7 +114,7 @@ class TaskRunner():
             if not setupmode:
                 # run sby
                 sby_args = ["sby", "-f", f"{task.dir}.sby"]
-                p.append(await runner(self.client, sby_args, self.workdir))
+                p.append(await runner(self.client, sby_args, workdir))
         elif task.stmt == "trace":
             if self.scycfg.options.replay_vcd:
                 raise NotImplementedError(f"replay_vcd option with trace statement on line {task.line}")
@@ -159,13 +160,13 @@ class TaskRunner():
 
                 # now use yosys to replay trace and generate vcd
                 yw_args.append(f"{task.name}.yw")
-                p.append(await runner(self.client, yw_args, self.workdir))
+                p.append(await runner(self.client, yw_args, workdir))
                 common_il = self.sbycfg.files[0].split()[-1]
                 yosys_args = [
                     "yosys", "-p", 
                     f"read_rtlil {common_il}; sim -hdlname -r {task.name}.yw -vcd {task.name}.vcd"
                 ]
-                p.append(await runner(self.client, yosys_args, self.workdir))
+                p.append(await runner(self.client, yosys_args, workdir))
         elif task.stmt == "append":
             if self.scycfg.options.replay_vcd:
                 raise NotImplementedError(f"replay_vcd option with append statement on line {task.line}")

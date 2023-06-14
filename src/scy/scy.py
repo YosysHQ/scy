@@ -39,12 +39,13 @@ args = parser.parse_args()
 scyfile = args.scyfile
 workdir = args.workdir
 if workdir is None:
-    workdir = scyfile.split('.')[0]
+    workdir = args.workdir = scyfile.split('.')[0]
 
 # parse scy file
 scy_source = source_str.read_file(scyfile)
 
 scycfg = SCYConfig(scy_source)
+scycfg.args = args
 
 if args.dump_tree:
     print(scycfg.sequence)
@@ -173,9 +174,9 @@ common_il = os.path.join('common', 'model', 'design_prep.il')
 sbycfg.prep_shared(common_il)
 
 # execute task tree
-task_runner = TaskRunner(sbycfg, scycfg, client, workdir, add_cells, enable_cells)
+task_runner = TaskRunner(sbycfg, scycfg, client, add_cells, enable_cells)
 
-p_all = asyncio.run(task_runner.run_task(scycfg.sequence, recurse=True, setupmode=args.setupmode))
+p_all = asyncio.run(task_runner.run_task(scycfg.sequence, recurse=True))
 
 make_log = ""
 for p in p_all:
