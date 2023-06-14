@@ -10,7 +10,10 @@ from yosys_mau.config_parser import (
     StrValue,
     postprocess_section
 )
-from scy_task_tree import TaskTree
+try:
+    from scy.scy_task_tree import TaskTree
+except ModuleNotFoundError:
+    from scy_task_tree import TaskTree
 
 class SCYOptions(ConfigOptions):
     design_scope = Option(StrValue(), default="")

@@ -2,9 +2,14 @@ import asyncio
 import copy
 import os
 
-from scy_task_tree import TaskTree
-from scy_config_parser import SCYConfig
-from scy_sby_bridge import SBYBridge
+try:
+    from scy.scy_task_tree import TaskTree
+    from scy.scy_config_parser import SCYConfig
+    from scy.scy_sby_bridge import SBYBridge
+except ModuleNotFoundError:
+    from scy_task_tree import TaskTree
+    from scy_config_parser import SCYConfig
+    from scy_sby_bridge import SBYBridge
 
 import yosys_mau.task_loop.job_server as job
 
@@ -41,7 +46,7 @@ def gen_sby(task: TaskTree, sbycfg: SBYBridge, scycfg: SCYConfig,
     post_sim_commands = []
     for cell in add_cells.values():
         en_sig = '1' if cell["cell"] in task.enable_cells else '0'
-        pre_sim_commands.append(f"connect -port {cell['cell']} \EN 1'b{en_sig}")
+        pre_sim_commands.append(f"connect -port {cell['cell']} \\EN 1'b{en_sig}")
     for hdlname in enable_cells.keys():
         task_cell = task.enable_cells.get(hdlname, None)
         if task.has_local_enable_cells:
@@ -52,7 +57,7 @@ def gen_sby(task: TaskTree, sbycfg: SBYBridge, scycfg: SCYConfig,
                     break
         if task_cell:
             status = task_cell["status"]
-            pre_sim_commands.append(f"connect -port {hdlname} \EN {task_cell[status]}")
+            pre_sim_commands.append(f"connect -port {hdlname} \\EN {task_cell[status]}")
             if status == "enable":
                 post_sim_commands.append(f"chformal -skip 1 c:{hdlname}")
     sbycfg.script.extend(pre_sim_commands)
