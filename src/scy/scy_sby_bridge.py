@@ -1,5 +1,22 @@
 import os
 
+try:
+    from scy.scy_config_parser import SCYConfig
+except ModuleNotFoundError:
+    from scy_config_parser import SCYConfig
+
+def from_scycfg(scycfg: SCYConfig):
+    sbycfg = SBYBridge()
+    sbycfg.add_section("options", scycfg.options.sby_options)
+    sbycfg.add_section("script", scycfg.design)
+    sbycfg.add_section("engines", scycfg.engines)
+
+    for sect in scycfg.fallback:
+        name = sect.name
+        if sect.arguments: name += f" {sect.arguments}"
+        sbycfg.add_section(name, sect.contents)
+    return sbycfg
+
 class SBYBridge():
     def __init__(self, data: "dict[str, list[str]]" = {}):
         self.data = {}
@@ -75,3 +92,5 @@ class SBYBridge():
         for key in list(self.data.keys()):
             if "file " in key:
                 self.data.pop(key)
+    
+    from_scycfg = staticmethod(from_scycfg)

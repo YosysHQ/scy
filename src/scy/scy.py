@@ -63,15 +63,7 @@ except FileExistsError:
         sys.exit(1)
 
 # prepare sby files
-sbycfg = SBYBridge()
-sbycfg.add_section("options", scycfg.options.sby_options)
-sbycfg.add_section("script", scycfg.design)
-sbycfg.add_section("engines", scycfg.engines)
-
-for sect in scycfg.fallback:
-    name = sect.name
-    if sect.arguments: name += f" {sect.arguments}"
-    sbycfg.add_section(name, sect.contents)
+sbycfg = SBYBridge.from_scycfg(scycfg)
 
 sbycfg.fix_relative_paths("..")
 
