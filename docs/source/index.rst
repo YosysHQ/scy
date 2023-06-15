@@ -7,4 +7,5 @@ Sequence of Covers with Yosys (SCY)
 
    install
    reference
+   usage
    example
