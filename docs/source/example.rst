@@ -11,14 +11,14 @@ completion, writing an event to the `hpmevent` register, and reading an increasi
 `hpmcounter` register.
 
 `hpm-test.scy`
-==============
+--------------
 
 The hpm-test SCY code can be run using `scy hpm-test.scy` from the same directory.
 
 The following sections analyse the `scy` configuration file and the operations performed.
 
 Design
-------
+~~~~~~
 
 The `[design]` section is as follows:
 
@@ -32,7 +32,7 @@ simulation.  As the design will be put through the solver multiple times, and we
 be retained between iterations, we need to remove this assumption.
 
 Sequence
---------
+~~~~~~~~
 
 The `[sequence]` section is as follows:
 
