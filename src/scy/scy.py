@@ -1,16 +1,13 @@
 #!/usr/bin/env python3
 
 import os, sys, re
-import argparse
 import asyncio
 import json
 import shutil
-##yosys-sys-path##
-from scy_cmdline import parser_func
-from scy_config_parser import SCYConfig
-from scy_sby_bridge import SBYBridge
-from scy_task_runner import TaskRunner, runner
-from scy_task_tree import TaskTree
+from scy.scy_cmdline import parser_func
+from scy.scy_config_parser import SCYConfig
+from scy.scy_sby_bridge import SBYBridge
+from scy.scy_task_runner import TaskRunner, runner
 from yosys_mau import source_str
 import yosys_mau.task_loop.job_server as job
 
@@ -196,3 +193,7 @@ for task in trace_tasks:
     print(f"  {task.name:12} {cycles_str} [{chunks_str}]")
 
 sys.exit(0)
+
+def main():
+    # this seems lazy, because it is
+    pass

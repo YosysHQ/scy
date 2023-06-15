@@ -1,9 +1,5 @@
 import os
-
-try:
-    from scy.scy_config_parser import SCYConfig
-except ModuleNotFoundError:
-    from scy_config_parser import SCYConfig
+from scy.scy_config_parser import SCYConfig
 
 def from_scycfg(scycfg: SCYConfig):
     sbycfg = SBYBridge()

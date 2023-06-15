@@ -1,4 +1,5 @@
 from argparse import Namespace
+from scy.scy_task_tree import TaskTree
 from yosys_mau.config_parser import (
     BoolValue,
     ConfigOptions,
@@ -10,10 +11,6 @@ from yosys_mau.config_parser import (
     StrValue,
     postprocess_section
 )
-try:
-    from scy.scy_task_tree import TaskTree
-except ModuleNotFoundError:
-    from scy_task_tree import TaskTree
 
 class SCYOptions(ConfigOptions):
     design_scope = Option(StrValue(), default="")

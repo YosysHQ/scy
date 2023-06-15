@@ -1,15 +1,9 @@
 import asyncio
 import copy
 import os
-
-try:
-    from scy.scy_task_tree import TaskTree
-    from scy.scy_config_parser import SCYConfig
-    from scy.scy_sby_bridge import SBYBridge
-except ModuleNotFoundError:
-    from scy_task_tree import TaskTree
-    from scy_config_parser import SCYConfig
-    from scy_sby_bridge import SBYBridge
+from scy.scy_task_tree import TaskTree
+from scy.scy_config_parser import SCYConfig
+from scy.scy_sby_bridge import SBYBridge
 
 import yosys_mau.task_loop.job_server as job
 
