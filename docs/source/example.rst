@@ -31,6 +31,9 @@ The `rvfi_testbench` code provides an assumption that the core is reset during t
 simulation.  As the design will be put through the solver multiple times, and we want the state to
 be retained between iterations, we need to remove this assumption.
 
+
+.. _example sequence:
+
 Sequence
 ~~~~~~~~
 

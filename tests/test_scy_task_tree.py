@@ -60,6 +60,13 @@ def test_mintree_reduce_depth(mintree: TaskTree, amount: int, expected: list):
         ("cover c\n", "cover", "c", None, ""),
         ("enable cell d e f:\nbody\n", "enable", "cell", "d e f", "body\n"),
         ("cover g:\n body\n cover h", "cover", "g", None, " body\n"),
+        ("trace this\n", "trace", "this", None, ""),
+        ("trace\n", None, None, None, None),
+        #("add assume\n", None, None, None, None),
+        ("add assume a b c\n", "add", "assume", "a b c", ""),
+        ("enable no body:\n", None, None, None, None),
+        ("enable with body:\n ", "enable", "with", "body", " "),
+        ("disable that:\n ", "disable", "that", None, " "),
 ])
 def test_task_from_string(input_str, stmt, name, asgmt, body):
     task_tree = TaskTree.from_string(input_str)

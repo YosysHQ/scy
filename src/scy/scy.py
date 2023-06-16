@@ -119,7 +119,8 @@ if scycfg.options.replay_vcd and not scycfg.options.design_scope:
     with open(design_json, 'r') as f:
         design = json.load(f)
 
-    assert len(design["modules"]) == 1, "expected one top level module"
+    assert len(design["modules"]) == 1, ("expected one top level module, " 
+                                         "try setting the 'design_scope' option")
     scycfg.options.design_scope = design["modules"][0]["name"]
 
 if add_log:
