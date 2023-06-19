@@ -115,8 +115,12 @@ class TaskTree:
         return not self.children
     
     @property
+    def is_common(self) -> bool:
+        return self.stmt == "common"
+    
+    @property
     def uses_sby(self) -> bool:
-        return self.stmt in ["cover"]
+        return self.stmt in ["cover", "common"]
 
     @property
     def makes_dir(self) -> bool:
@@ -132,7 +136,9 @@ class TaskTree:
     
     @property
     def tracestr(self) -> str:
-        if self.uses_sby:
+        if self.is_common:
+            return "common"
+        elif self.uses_sby:
             return f"trace{self.line:03d}"
         else:
             return self.parent.tracestr

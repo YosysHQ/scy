@@ -1,6 +1,8 @@
 import asyncio
 import copy
 import os
+import json
+import re
 from scy.scy_task_tree import TaskTree
 from scy.scy_config_parser import SCYConfig
 from scy.scy_sby_bridge import SBYBridge
@@ -11,6 +13,7 @@ async def runner(client: job.Client, exe_args: "list[str]", workdir: str):
     lease = client.request_lease()
     await lease
 
+    print(f'Running "{" ".join(exe_args)}"')
     coro = await asyncio.create_subprocess_exec(
         *exe_args, cwd=workdir, 
         stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
@@ -20,11 +23,55 @@ async def runner(client: job.Client, exe_args: "list[str]", workdir: str):
     del lease
     return coro
 
+def parse_common_sby(common_task: TaskTree, sbycfg: SBYBridge, scycfg: SCYConfig):
+    assert common_task.is_common, "expected tree root to be common.sby generation"
+
+    # preparse tree to extract cell generation
+    add_cells: "dict[int, dict[str]]" = {}
+    enable_cells: "dict[str, dict[str, str | bool]]" = {}
+    def add_enable_cell(hdlname: str, stmt: str):
+        enable_cells.setdefault(hdlname, {"disable": "1'b0"})
+        enable_cells[hdlname][f"does_{stmt}"] = True
+
+    for task in common_task.traverse():
+        if task.stmt == "add":
+            if task.name not in ["assert", "assume", "live", "fair", "cover"]:
+                raise NotImplementedError(f"cell type {task.name!r} on line {task.line}")
+            add_cells[task.line] = {"type": task.name}
+            add_cells[task.line].update(task.get_asgmt())
+        elif task.stmt in ["enable", "disable"]:
+            add_enable_cell(task.name, task.stmt)
+        elif task.body:
+            for line in task.body.split('\n'):
+                try:
+                    stmt, hdlname = line.split()
+                except ValueError:
+                    continue
+                if stmt in ["enable", "disable"]:
+                    add_enable_cell(hdlname, stmt)
+
+    # add cells to sby script
+    add_log = None
+    for (line, cell) in add_cells.items():
+        sbycfg.script.extend([f"add -{cell['type']} {cell['lhs']} # line {line}",
+                            f"setattr -set scy_line {line}  w:{cell['lhs']} %co c:$auto$add* %i"])
+    for hdlname in enable_cells.keys():
+        select = f"w:*:*_EN c:{hdlname} %ci:+[EN] %i"
+        sbycfg.script.append(f"setattr -set scy_line 0 -set hdlname:{hdlname} 1 {select}")
+    if add_cells or enable_cells:
+        add_log = "add_cells.log"
+        sbycfg.script.append(f"tee -o {add_log} printattrs a:scy_line")
+        add_log = os.path.join(scycfg.args.workdir, "common", "src", add_log)
+
+    return (add_log, add_cells, enable_cells)
+
 def gen_sby(task: TaskTree, sbycfg: SBYBridge, scycfg: SCYConfig,
             add_cells: "dict[int, dict[str]]", 
             enable_cells: "dict[str, dict[str, str | bool]]"):
 
-    if not task.is_root:
+    sbycfg = copy.deepcopy(sbycfg)
+
+    if not task.is_root and not task.parent.is_common:
         # child nodes depend on parent
         parent = task.parent
         parent_trace = os.path.join(parent.get_dir(),
@@ -105,35 +152,91 @@ def gen_traces(task: TaskTree) -> "list[str]":
     return traces
 
 class TaskRunner():
-    def __init__(self, sbycfg: SBYBridge, scycfg: SCYConfig, client: job.Client,
-                 add_cells: "dict[int, dict[str]]" = {}, 
-                 enable_cells: "dict[str, dict[str, str | bool]]" = {}):
+    def __init__(self, sbycfg: SBYBridge, scycfg: SCYConfig, client: job.Client):
         self.sbycfg = sbycfg
         self.scycfg = scycfg
         self.client = client
-        self.add_cells = add_cells
-        self.enable_cells = enable_cells
-        self.task_steps = {}
+        self.add_cells: "dict[int, dict[str]]" = {}
+        self.enable_cells: "dict[str, dict[str, str | bool]]" = {}
+        self.task_steps: "dict[str, int]" = {}
+
+    async def run_tree(self):
+        p = []
+        common_task = self.scycfg.sequence
+        workdir = self.scycfg.args.workdir
+
+        (add_log, self.add_cells, self.enable_cells) = parse_common_sby(common_task, self.sbycfg, self.scycfg)
+
+        # use sby to prepare input
+        print(f"Preparing input files")
+        task_sby = os.path.join(f"{workdir}", 
+                                f"common.sby")
+
+        with open(task_sby, 'w') as sbyfile:
+            self.sbycfg.dump_common(sbyfile)
+
+        sby_args = ["sby", "common.sby"]
+        p.append(await runner(self.client, sby_args, workdir))
+
+        if self.scycfg.options.replay_vcd and not self.scycfg.options.design_scope:
+            # load top level design name back from generated model
+            design_json = os.path.join(workdir, "common", "model", "design.json")
+            with open(design_json, 'r') as f:
+                design = json.load(f)
+
+            assert len(design["modules"]) == 1, ("expected one top level module, " 
+                                                "try setting the 'design_scope' option")
+            self.scycfg.options.design_scope = design["modules"][0]["name"]
+
+        if add_log:
+            # load back added cells
+            with open(add_log, 'r') as f:
+                cell_dump = f.read()
+                cell_regex = r"(?P<cell>\S+)(?P<body>(?:\n  (?:.*))*)"
+                for cell_m in re.finditer(cell_regex, cell_dump):
+                    property_regex = r"  .. (?P<pty>[^:]+?)(?::(?P<name>.+?))?=(?P<val>.*) .."
+                    cell = cell_m.group("cell")
+                    for m in re.finditer(property_regex, cell_m.group("body")):
+                        d = m.groupdict()
+                        if d["pty"] == "hdlname":
+                            self.enable_cells[d["name"]]["enable"] = cell
+                        elif d["pty"] == "scy_line":
+                            line = int(d["val"], base=2)
+                            if line:
+                                self.add_cells[line]["cell"] = cell
+
+        # modify config for full sby runs
+        common_il = os.path.join('common', 'model', 'design_prep.il')
+        self.sbycfg.prep_shared(common_il)
+
+        for name, vals in self.enable_cells.items():
+            task_cell = self.enable_cells[name].copy()
+            if not vals.get("does_enable", False):
+                task_cell["status"] = "enable"
+                common_task.add_enable_cell(name, task_cell)
+            elif not vals.get("does_disable", False):
+                task_cell["status"] = "disable"
+                common_task.add_enable_cell(name, task_cell)
+
+        common_task.update_children_enable_cells(recurse=False)
+
+        childrenp = await asyncio.gather(
+            *[self.run_task(child) for child in common_task.children]
+        )
+        for childp in childrenp:
+            p.extend(childp)
+
+        return p
 
     async def run_task(self, task: TaskTree, recurse=True):
         p = []
         task_trace = None
         workdir = self.scycfg.args.workdir
         setupmode = self.scycfg.args.setupmode
-        # initialise root task with enable cells
-        if task.is_root:
-            for name, vals in self.enable_cells.items():
-                task_cell = self.enable_cells[name].copy()
-                if not vals.get("does_enable", False):
-                    task_cell["status"] = "enable"
-                    task.add_enable_cell(name, task_cell)
-                elif not vals.get("does_disable", False):
-                    task_cell["status"] = "disable"
-                    task.add_enable_cell(name, task_cell)
 
         if task.uses_sby:
             # generate sby
-            taskcfg = gen_sby(task, copy.deepcopy(self.sbycfg), self.scycfg,
+            taskcfg = gen_sby(task, self.sbycfg, self.scycfg,
                               self.add_cells, self.enable_cells)
             task_sby = os.path.join(f"{workdir}", 
                                     f"{task.dir}.sby")
@@ -150,8 +253,8 @@ class TaskRunner():
                 raise NotImplementedError(f"replay_vcd option with trace statement on line {task.line}")
             if not task.is_leaf:
                 raise NotImplementedError(f"trace statement has children on line {task.line}")
-            if task.is_root:
-                raise NotImplementedError(f"trace statement is root on line {task.line}")
+            assert not task.is_root, f"trace statement is root on line {task.line}"
+
             if not setupmode:
                 # prepare yosys
                 traces = gen_traces(task)
