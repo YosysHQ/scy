@@ -48,15 +48,16 @@ def scytr_upcnt(sbycfg_upcnt: SBYBridge, scycfg_upcnt: SCYConfig):
 
 def test_setup(scytr_upcnt: scytr.TaskRunner):
     scycfg = scytr_upcnt.scycfg
+    root = scycfg.sequence[0]
     if scycfg.args.setupmode:
-        p = asyncio.run(scytr_upcnt.run_task(scycfg.sequence, recurse=True))
+        p = asyncio.run(scytr_upcnt.run_task(root, recurse=True))
         assert p == [], "expected no processes to run"
         sby_files = [file.name for file in pathlib.Path(scycfg.args.workdir).glob("*.sby")]
-        for task in scycfg.sequence.traverse():
+        for task in root.traverse():
             if task.uses_sby:
                 sby_files.remove(f"{task.dir}.sby")
         assert not sby_files
     else:
         with pytest.raises(AttributeError):
             # client=None, so this should fail
-            asyncio.run(scytr_upcnt.run_task(scycfg.sequence))
+            asyncio.run(scytr_upcnt.run_task(root))

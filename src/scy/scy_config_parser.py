@@ -30,8 +30,15 @@ class SCYOptions(ConfigOptions):
 class SCYConfig(ConfigParser):
     options = OptionsSection(SCYOptions)
     @postprocess_section(StrSection())
-    def sequence (self, sequence: str) -> TaskTree:
-        return TaskTree.from_string(sequence)
+    def sequence (self, sequence: str) -> "list[TaskTree | str]":
+        tree_list = TaskTree.from_string(sequence)
+        for tree in tree_list:
+            if tree:
+                assert isinstance(tree, TaskTree), "bad sequence section"
+            else:
+                tree_list.remove(tree)
+        assert tree_list, "no cover sequences found"
+        return tree_list
     design = StrSection(default="")
     engines = StrSection(default="smtbmc boolector\n")
     fallback = RawSection(all_sections=True)
@@ -39,3 +46,4 @@ class SCYConfig(ConfigParser):
     def __init__(self, contents: str) -> None:
         super().__init__(contents)
         self.args: Namespace = None
+        self.root: TaskTree = None

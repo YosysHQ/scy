@@ -1,49 +1,47 @@
 from typing import Iterable
 from yosys_mau import source_str
-from yosys_mau.source_str import re
+from yosys_mau.source_str import (
+    re,
+    SourceStr
+)
 
-def from_string(string: source_str, L0: int = 0, depth: int = 0) -> "TaskTree | None":
-    stmt_regex = r"^(?P<ws>\s*)(?P<stmt>cover|append|trace|add|disable|enable) "\
-                 r"(?P<name>\S+?)( (?P<asgmt>.*?)|)(:\n(?P<body>.*)|\n)"
-    m = re.search(stmt_regex, string, flags=re.DOTALL)
-    if not m: # no statement
-        return None
+def from_string(string: "SourceStr | str", L0: int = 0, depth: int = 0):
+    if not isinstance(string, SourceStr):
+        string = source_str.from_content(string, "dev/null")
+    nest_regex = r"^(?P<ws>[ \t]*)(.+(\n(?P=ws)\s+.*)*)"
+    tree_list: "list[TaskTree | str] | TaskTree" = []
+    for tree in re.finditer(nest_regex, string, flags=re.MULTILINE):
+        tree_str = tree.group()
+        stmt_regex = r"^(?P<ws>\s*)(?P<stmt>cover|append|trace|add|disable|enable) "\
+                    r"(?P<name>\S+?)( (?P<asgmt>.*?)|)(:\n(?P<body>.*)|:?\n|:?$)"
+        m = re.search(stmt_regex, tree_str, flags=re.DOTALL)
+        if not m: # no statement
+            tree_list.append(tree_str)
+            continue
 
-    d = m.groupdict()
-    # check for standalone body statements
-    if d['stmt'] in ["enable", "disable"] and not d['body']:
-        return None
+        d = m.groupdict()
+        print(d)
+        # check for standalone body statements
+        if d['stmt'] in ["enable", "disable"] and not d['body']:
+            tree_list.append(tree_str)
+            continue
 
-    # if we're dealing with a source_str we can get the source line directly from it
-    source_map = source_str.source_map(m.string)
-    if source_map:
+        # if we're dealing with a source_str we can get the source line directly from it
+        source_map = source_str.source_map(m.string)
         span = source_map.spans[0]
         start_line, _ = span.file.text_position(span.file_start)
         line = start_line
-    else:
-        line = L0 + d["ws"].count('\n')
 
-    # otherwise continue recursively
-    root = TaskTree(name=d['name'], stmt=d['stmt'], line=line, depth=depth,
-                    asgmt=d.get('asgmt', None))
-    if not source_map: line += 1
+        # otherwise continue recursively
+        root = TaskTree(name=d['name'], stmt=d['stmt'], line=line, depth=depth,
+                        asgmt=d.get('asgmt', None))
 
-    body_str = d['body']
-    body_regex = r"(?P<ws>\s+).*?\n(?=(?P=ws)\S|$)"
-    if body_str:
-        body_processed = False
-        for body_m in re.finditer(body_regex, body_str, flags=re.DOTALL):
-            body_processed = True
-            child = from_string(body_m.group(0), line)
-            if child:
-                root.add_child(child)
-            else:
-                root.body += body_m.group(0)
-            if not source_map: line += body_m.group(0).count('\n')
-        if not body_processed:
-            root.body += d['body']
+        if d['body']:
+            root.add_children(from_string(d['body']))
 
-    return root
+        tree_list.append(root)
+
+    return tree_list
 
 class TaskTree:
     def __init__(self, name: str, stmt: str, line: int, steps: int = 0, depth: int = 0,
@@ -70,6 +68,14 @@ class TaskTree:
             self.enable_cells = enable_cells
         else:
             self.enable_cells = {}
+
+    def add_children(self, children: "list[TaskTree | str]"):
+        for child in children:
+            if isinstance(child, str):
+                self.body += child
+            elif isinstance(child, TaskTree):
+                self.add_child(child)
+        return self
 
     def add_child(self, child: "TaskTree"):
         child.parent = self

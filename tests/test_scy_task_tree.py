@@ -2,31 +2,34 @@ from textwrap import dedent
 from scy.scy_task_tree import TaskTree
 import pytest
 
+def first_tree_from_string(input_str: str) -> "TaskTree | str":
+    return TaskTree.from_string(input_str)[0]
+
 def get_tree_list(func, tree: TaskTree):
     return list(map(func, tree.traverse()))
 
 def test_empty_tree():
     task_tree = TaskTree.from_string("")
-    assert task_tree == None
+    assert not task_tree
 
 @pytest.fixture(params=["from_string", "constructed"])
-def mintree(request) -> TaskTree:
+def mintree(request) -> "TaskTree | str":
     if request.param == "from_string":
-        return TaskTree.from_string(dedent("""\
+        return first_tree_from_string(dedent("""\
             cover a:
                 cover b:
                     cover c:
                 cover d
         """))
     elif request.param == "constructed":
-        a = TaskTree("a", "cover", 0)
-        b = TaskTree("b", "cover", 1)
-        c = TaskTree("c", "cover", 2)
-        d = TaskTree("d", "cover", 3)
-        a.add_child(b.add_child(c)).add_child(d)
+        a = TaskTree("a", "cover", 1)
+        b = TaskTree("b", "cover", 2)
+        c = TaskTree("c", "cover", 3)
+        d = TaskTree("d", "cover", 4)
+        a.add_children([b.add_child(c), d])
         return a
     else:
-        return None
+        return ""
 
 def test_mintree_exists(mintree):
     assert mintree
@@ -35,7 +38,7 @@ def test_mintree_exists(mintree):
         ("x.stmt", ["cover"]*4),
         ("x.name", ["a", "b", "c", "d"]),
         ("x.depth", [0, 1, 2, 1]),
-        ("x.line", [0, 1, 2, 3]),
+        ("x.line", [1, 2, 3, 4]),
         ("x.is_root", [True, False, False, False]),
         ("x.is_leaf", [False, False, True, True]),
         ("len(x)", [4, 2, 1, 1]),
@@ -54,12 +57,12 @@ def test_mintree_reduce_depth(mintree: TaskTree, amount: int, expected: list):
 
 @pytest.mark.parametrize("input_str,stmt,name,asgmt,body", [
         ("cover", None, None, None, None),
-        ("cover a", None, None, None, None),
+        ("cover a", "cover", "a", None, ""),
         ("cover a:\n", "cover", "a", None, ""),
-        ("cover b:\nbody", "cover", "b", None, "body"),
+        ("cover b:\n body", "cover", "b", None, " body"),
         ("cover c\n", "cover", "c", None, ""),
-        ("enable cell d e f:\nbody\n", "enable", "cell", "d e f", "body\n"),
-        ("cover g:\n body\n cover h", "cover", "g", None, " body\n"),
+        ("enable cell d e f:\n body\n", "enable", "cell", "d e f", " body"),
+        ("cover g:\n body\n cover h", "cover", "g", None, " body"),
         ("trace this\n", "trace", "this", None, ""),
         ("trace\n", None, None, None, None),
         #("add assume\n", None, None, None, None),
@@ -69,18 +72,18 @@ def test_mintree_reduce_depth(mintree: TaskTree, amount: int, expected: list):
         ("disable that:\n ", "disable", "that", None, " "),
 ])
 def test_task_from_string(input_str, stmt, name, asgmt, body):
-    task_tree = TaskTree.from_string(input_str)
+    task_tree = first_tree_from_string(input_str)
     if stmt:
-        assert task_tree
+        assert isinstance(task_tree, TaskTree)
         assert task_tree.stmt == stmt
         assert task_tree.name == name
         assert task_tree.asgmt == asgmt
         assert task_tree.body == body
     else:
-        assert not task_tree
+        assert isinstance(task_tree, str)
 
 def test_enable_stmt():
-    task_tree = TaskTree.from_string(dedent("""\
+    task_tree = first_tree_from_string(dedent("""\
         cover a:
             enable cell b:
                 cover c
@@ -97,37 +100,43 @@ def test_enable_stmt():
     assert enable_task.name == "cell"
 
 def test_enable_body():
-    task_tree = TaskTree.from_string(dedent("""\
+    task_tree = first_tree_from_string(dedent("""\
         cover a:
             enable cell b
             cover c
     """))
-
+    print(task_tree)
     assert len(task_tree) == 2
     assert task_tree.body.strip() == "enable cell b"
     assert task_tree.has_local_enable_cells
 
-def test_tree_blank_line():
-    task_tree = TaskTree.from_string(dedent("""\
+@pytest.fixture
+def tree_with_blank():
+    return first_tree_from_string(dedent("""\
         
         cover a
     """))
 
-    assert len(task_tree) == 1
-    assert task_tree.stmt == "cover"
-    assert task_tree.line == 1
+def test_tree_with_blank_len(tree_with_blank: TaskTree):
+    assert len(tree_with_blank) == 1
+
+def test_tree_with_blank_stmt(tree_with_blank: TaskTree):
+    assert tree_with_blank.stmt == "cover"
+
+def test_tree_with_blank_line(tree_with_blank: TaskTree):
+    assert tree_with_blank.line == 2
 
 def test_bad_stmt():
-    task_tree = TaskTree.from_string(dedent("""\
+    task_tree = first_tree_from_string(dedent("""\
         help
     """))
 
-    assert not task_tree
+    assert isinstance(task_tree, str)
 
 # This test might be less of a "does the code do what we want" 
 #   and more "if the code changes, this test will fail"
 def test_no_colon():
-    task_tree = TaskTree.from_string(dedent("""\
+    task_tree = first_tree_from_string(dedent("""\
         cover a
             cover b
     """))
@@ -173,3 +182,15 @@ def test_update_children_enable_cells_len(enable_tree_with_cell, recurse):
         assert tree_lens == [1, 1, 1, 1]
     else:
         assert tree_lens == [1, 1, 2, 1]
+
+@pytest.mark.parametrize("input_str", [
+        dedent("""
+            cover a:
+                cover b
+            cover c:
+                cover d
+        """)
+])
+def test_multiple_root(input_str: str):
+    task_tree = TaskTree.from_string(input_str)
+    assert len(task_tree) == 2

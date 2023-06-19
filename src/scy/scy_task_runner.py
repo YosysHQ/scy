@@ -162,8 +162,8 @@ class TaskRunner():
         self.task_steps: "dict[str, int]" = {}
 
     async def run_tree(self):
-        p = []
-        common_task = self.scycfg.sequence
+        p_all = []
+        common_task = self.scycfg.root
         workdir = Path(self.scycfg.args.workdir)
 
         (add_log, self.add_cells, self.enable_cells) = parse_common_sby(common_task, self.sbycfg, self.scycfg)
@@ -176,7 +176,9 @@ class TaskRunner():
             self.sbycfg.dump_common(sbyfile)
 
         sby_args = ["sby", "common.sby"]
-        p.append(await runner(self.client, sby_args, workdir))
+        p = await runner(self.client, sby_args, workdir)
+        assert not p.returncode, f"common.sby failed to generate, see {workdir / 'common' / 'logfile.txt'} for more info"
+        p_all.append(p)
 
         if self.scycfg.options.replay_vcd and not self.scycfg.options.design_scope:
             # load top level design name back from generated model
@@ -224,12 +226,12 @@ class TaskRunner():
             *[self.run_task(child) for child in common_task.children]
         )
         for childp in childrenp:
-            p.extend(childp)
+            p_all.extend(childp)
 
-        return p
+        return p_all
 
     async def run_task(self, task: TaskTree, recurse=True):
-        p = []
+        p_all = []
         task_trace = None
         workdir = Path(self.scycfg.args.workdir)
         setupmode = self.scycfg.args.setupmode
@@ -246,13 +248,15 @@ class TaskRunner():
             if not setupmode:
                 # run sby
                 sby_args = ["sby", "-f", f"{task.dir}.sby"]
-                p.append(await runner(self.client, sby_args, workdir))
+                p = await runner(self.client, sby_args, workdir)
+                assert not p.returncode, f"SBY produced an error, see {workdir / task.dir / 'logfile.txt'} for more info"
+                p_all.append(p)
         elif task.stmt == "trace":
             if self.scycfg.options.replay_vcd:
                 raise NotImplementedError(f"replay_vcd option with trace statement on line {task.line}")
             if not task.is_leaf:
                 raise NotImplementedError(f"trace statement has children on line {task.line}")
-            assert not task.is_root, f"trace statement is root on line {task.line}"
+            assert not task.is_root and not task.parent.is_common, f"trace statement on line {task.line} has nothing to trace"
 
             if not setupmode:
                 # prepare yosys
@@ -265,13 +269,17 @@ class TaskRunner():
 
                 # now use yosys to replay trace and generate vcd
                 yw_args.append(f"{task.name}.yw")
-                p.append(await runner(self.client, yw_args, workdir))
+                p = await runner(self.client, yw_args, workdir)
+                assert not p.returncode
+                p_all.append(p)
                 common_il = self.sbycfg.files[0].split()[-1]
                 yosys_args = [
                     "yosys", "-p", 
                     f"read_rtlil {common_il}; sim -hdlname -r {task.name}.yw -vcd {task.name}.vcd"
                 ]
-                p.append(await runner(self.client, yosys_args, workdir))
+                p = await runner(self.client, yosys_args, workdir)
+                assert not p.returncode
+                p_all.append(p)
         elif task.stmt == "append":
             if self.scycfg.options.replay_vcd:
                 raise NotImplementedError(f"replay_vcd option with append statement on line {task.line}")
@@ -298,7 +306,7 @@ class TaskRunner():
                 *[self.run_task(child, recurse) for child in task.children]
             )
             for childp in childrenp:
-                p.extend(childp)
+                p_all.extend(childp)
 
-        return p
+        return p_all
 

@@ -35,6 +35,11 @@ def base_cfg() -> "dict[str, list[str]]":
 
 @pytest.fixture(scope="class")
 def cover_stmts(test):
+    try:
+        return test["cover_stmts"]
+    except KeyError:
+        pass
+
     counts = set()
     for test in test["data"]:
         counts.add(int(test.strip()))
@@ -47,6 +52,11 @@ def cover_stmts(test):
 
 @pytest.fixture(scope="class")
 def sequence(test):
+    try:
+        return test["sequence"]
+    except KeyError:
+        pass
+
     sequence = []
     regex = r"(\d+)"
     subst = r"cover cp_\g<0>:"
@@ -56,21 +66,29 @@ def sequence(test):
 
 @pytest.mark.parametrize("test", [
         {"name": "test0", "data": ["4", " 12", " 14", "  12"]},
+        {"name": "fixed_data", "sequence": ["123", "abc"],
+                               "cover_stmts": ["", "blank"]}
 ], scope="class")
 class TestFixturesClass:
-    def test_sequence(self, sequence):
-        assert sequence == ["cover cp_4:",
-                            " cover cp_12:",
-                            " cover cp_14:",
-                            "  cover cp_12:"]
+    def test_sequence(self, test, sequence):
+        if "sequence" in test:
+            assert sequence is test["sequence"]
+        else:
+            assert sequence == ["cover cp_4:",
+                                " cover cp_12:",
+                                " cover cp_14:",
+                                "  cover cp_12:"]
 
     def test_cover_stmts(self, test, cover_stmts):
-        counts = [x.strip() for x in test["data"]]
-        assert cover_stmts == ["\tif (!reset) begin",
-                            f"\t\tcp_{counts[0]}: cover(count=={counts[0]});",
-                            f"\t\tcp_{counts[1]}: cover(count=={counts[1]});",
-                            f"\t\tcp_{counts[2]}: cover(count=={counts[2]});",
-                            "\tend"]
+        if "cover_stmts" in test:
+            assert cover_stmts is test["cover_stmts"]
+        else:
+            counts = [x.strip() for x in test["data"]]
+            assert cover_stmts == ["\tif (!reset) begin",
+                                f"\t\tcp_{counts[0]}: cover(count=={counts[0]});",
+                                f"\t\tcp_{counts[1]}: cover(count=={counts[1]});",
+                                f"\t\tcp_{counts[2]}: cover(count=={counts[2]});",
+                                "\tend"]
 
 @pytest.fixture(scope="class")
 def scy_dir(tmp_path_factory: pytest.TempPathFactory, test, request: pytest.FixtureRequest):
@@ -98,6 +116,7 @@ def cmd_args():
 
 @pytest.mark.parametrize("test", [
         {"name": "pass", "data": ["1", " 2", "  3"], "chunks": [1, 1, 1]},
+        #{"name": "pass_seq", "data": ["1", "2", "3"], "chunks": [1, 2, 3]},
         {"name": "chunks", "data": ["2", " 7", "  9", "  6"], "chunks": [2, 5, 2, 1]},
         {"name": "chunks_reset", "data": ["6", " 3", "  2", " 2"], "chunks": [6, 3, 1, 3]},
         {"name": "fail_depth", "data": ["1", " 2", "  3", "  44"], "failure": "sby"},
@@ -128,5 +147,67 @@ class TestExecClass:
             assert found_match, f"{match_str} not found in {output_files}"
 
     def test_chunks(self, test: "dict[str]", scy_chunks: "list[int]"):
-        if test.get("chunks"):
+        if "chunks" in test:
             assert scy_chunks == test["chunks"]
+
+@pytest.mark.parametrize("test", [
+        {"name":      "simple", "data": ["4", " 12", " 14", "  12"]},
+        {"name":  "good_trace", "sequence": ["cover cp_4:", " trace now:"],
+                                "data": ["4"]},
+], scope="class")
+class TestComplexClass:
+    def test_runs(self, test: "dict[str, str | list]", scy_exec: subprocess.CompletedProcess):
+        scy_exec.check_returncode()
+
+@pytest.mark.parametrize("test", [
+        {"name":  "trace_root", "sequence": ["trace now:", "cover cp_4:"],
+                                "data": ["4"],
+                                "error": "nothing to trace"},
+        {"name": "trace_child", "sequence": ["trace now:", " cover cp_4:"],
+                                "data": ["4"],
+                                "error": "trace statement has children"},
+        {"name":  "bad_parent", "sequence": ["cover cp_1:", " cover cp_2"],
+                                "data": [],
+                                "error": "SBY produced an error",},
+        {"name":     "bad_seq", "sequence": ["123", "abc"],
+                                "cover_stmts": ["", "//blank"],
+                                "error": "bad sequence"},
+        {"name":    "bad_seq2", "sequence": ["", ""],
+                                "cover_stmts": ["", "//blank"],
+                                "error": "no cover sequences"},
+], scope="class")
+class TestErrorsClass:
+    def test_runs(self, test: "dict[str, str | list]", scy_exec: subprocess.CompletedProcess):
+        if "code" in test:
+            assert scy_exec.returncode == test["code"]
+        else:
+            with pytest.raises(subprocess.CalledProcessError):
+                scy_exec.check_returncode()
+
+        try:
+            last_err = bytes.decode(scy_exec.stderr).splitlines().pop()
+        except IndexError:
+            last_err = ""
+
+        assert test["error"] in last_err
+
+@pytest.mark.parametrize("test", [
+        {"name":   "no_covers", "sequence": ["cover cp_1:", ""],
+                                "data": [],
+                                "error": "No trace",
+                                "code": 1},
+], scope="class")
+class TestHandledErrorsClass:
+    def test_runs(self, test: "dict[str, str | list]", scy_exec: subprocess.CompletedProcess):
+        if "code" in test:
+            assert scy_exec.returncode == test["code"]
+        else:
+            with pytest.raises(subprocess.CalledProcessError):
+                scy_exec.check_returncode()
+
+        try:
+            last_out = bytes.decode(scy_exec.stdout).splitlines().pop()
+        except IndexError:
+            last_out = ""
+
+        assert test["error"] in last_out

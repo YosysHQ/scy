@@ -27,7 +27,9 @@ scycfg = SCYConfig(scy_source)
 scycfg.args = args
 
 if args.dump_tree:
-    print(scycfg.sequence)
+    for seq in scycfg.sequence:
+        if isinstance(seq, TaskTree):
+            print(seq)
     sys.exit(0)
 
 client = job.Client(args.jobcount)
@@ -48,7 +50,7 @@ sbycfg = SBYBridge.from_scycfg(scycfg)
 sbycfg.fix_relative_paths("..")
 
 # add common sby generation task
-scycfg.sequence = TaskTree("", "common", 0).add_child(scycfg.sequence)
+scycfg.root = TaskTree("", "common", 0).add_children(scycfg.sequence)
 
 # execute task tree
 task_runner = TaskRunner(sbycfg, scycfg, client)
@@ -82,7 +84,7 @@ task_steps.update({m['task']:int(m['step']) for m in log_matches})
 # output stats
 trace_tasks = []
 print("Chunks:")
-for task in scycfg.sequence.traverse():
+for task in scycfg.root.traverse():
     if task.stmt == "trace":
         trace_tasks.append(task)
     if task.stmt not in ["append", "cover"]:
