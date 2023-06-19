@@ -2,6 +2,6 @@ Using `scy`
 ===========
 
 .. argparse::
-    :filename: ../src/scy/scy_cmdline.py
+    :module: scy.scy_cmdline
     :func: parser_func
     :prog: scy
