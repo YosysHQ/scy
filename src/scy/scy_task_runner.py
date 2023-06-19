@@ -73,6 +73,37 @@ def gen_sby(task: TaskTree, sbycfg: SBYBridge, scycfg: SCYConfig,
 
     return sbycfg
 
+def gen_traces(task: TaskTree) -> "list[str]":
+    # reversing trace order means that the most recent trace will be first
+    task.traces.reverse()
+    traces = []
+    last_trace = True
+    for trace in task.traces:
+        split_trace = trace.split(maxsplit=1)
+        if len(split_trace) == 2:
+            trace, append = split_trace
+            append = int(append.split()[-1])
+        else:
+            append = 0
+        if last_trace:
+            last_trace = False
+            trace_path = os.path.join(task.get_dir(),
+                                    "engine_0",
+                                    "trace0.yw")
+        else:
+            # using sim -w appears to combine the final step of one trace with the first step of the next
+            # we emulate this by telling yosys-witness to skip one extra cycle than we told sim
+            append -= 1
+            trace_path = os.path.join(task.get_dir(),
+                                    "src", 
+                                    trace)
+        traces.append(f"{trace_path} -p {append}")
+
+    # we now need to flip the order back to the expected order
+    task.traces.reverse()
+    traces.reverse()
+    return traces
+
 class TaskRunner():
     def __init__(self, sbycfg: SBYBridge, scycfg: SCYConfig, client: job.Client,
                  add_cells: "dict[int, dict[str]]" = {}, 
@@ -123,34 +154,7 @@ class TaskRunner():
                 raise NotImplementedError(f"trace statement is root on line {task.line}")
             if not setupmode:
                 # prepare yosys
-                # reversing trace order means that the most recent trace will be first
-                task.traces.reverse()
-                traces = []
-                last_trace = True
-                for trace in task.traces:
-                    split_trace = trace.split(maxsplit=1)
-                    if len(split_trace) == 2:
-                        trace, append = split_trace
-                        append = int(append.split()[-1])
-                    else:
-                        append = 0
-                    if last_trace:
-                        last_trace = False
-                        trace_path = os.path.join(task.get_dir(),
-                                                "engine_0",
-                                                "trace0.yw")
-                    else:
-                        # using sim -w appears to combine the final step of one trace with the first step of the next
-                        # we emulate this by telling yosys-witness to skip one extra cycle than we told sim
-                        append -= 1
-                        trace_path = os.path.join(task.get_dir(),
-                                                "src", 
-                                                trace)
-                    traces.append(f"{trace_path} -p {append}")
-
-                # we now need to flip the order back to the expected order
-                task.traces.reverse()
-                traces.reverse()
+                traces = gen_traces(task)
 
                 # run yosys-witness to concatenate all traces
                 yw_args = ["yosys-witness", "yw2yw"]
