@@ -3,13 +3,14 @@ import copy
 import os
 import json
 import re
+from pathlib import Path
 from scy.scy_task_tree import TaskTree
 from scy.scy_config_parser import SCYConfig
 from scy.scy_sby_bridge import SBYBridge
 
 import yosys_mau.task_loop.job_server as job
 
-async def runner(client: job.Client, exe_args: "list[str]", workdir: str):
+async def runner(client: job.Client, exe_args: "list[str]", workdir: "str | Path"):
     lease = client.request_lease()
     await lease
 
@@ -61,7 +62,7 @@ def parse_common_sby(common_task: TaskTree, sbycfg: SBYBridge, scycfg: SCYConfig
     if add_cells or enable_cells:
         add_log = "add_cells.log"
         sbycfg.script.append(f"tee -o {add_log} printattrs a:scy_line")
-        add_log = os.path.join(scycfg.args.workdir, "common", "src", add_log)
+        add_log = Path(scycfg.args.workdir) / "common" / "src" / add_log
 
     return (add_log, add_cells, enable_cells)
 
@@ -163,14 +164,13 @@ class TaskRunner():
     async def run_tree(self):
         p = []
         common_task = self.scycfg.sequence
-        workdir = self.scycfg.args.workdir
+        workdir = Path(self.scycfg.args.workdir)
 
         (add_log, self.add_cells, self.enable_cells) = parse_common_sby(common_task, self.sbycfg, self.scycfg)
 
         # use sby to prepare input
         print(f"Preparing input files")
-        task_sby = os.path.join(f"{workdir}", 
-                                f"common.sby")
+        task_sby = workdir / "common.sby"
 
         with open(task_sby, 'w') as sbyfile:
             self.sbycfg.dump_common(sbyfile)
@@ -180,7 +180,7 @@ class TaskRunner():
 
         if self.scycfg.options.replay_vcd and not self.scycfg.options.design_scope:
             # load top level design name back from generated model
-            design_json = os.path.join(workdir, "common", "model", "design.json")
+            design_json = workdir / "common" / "model" / "design.json"
             with open(design_json, 'r') as f:
                 design = json.load(f)
 
@@ -231,15 +231,14 @@ class TaskRunner():
     async def run_task(self, task: TaskTree, recurse=True):
         p = []
         task_trace = None
-        workdir = self.scycfg.args.workdir
+        workdir = Path(self.scycfg.args.workdir)
         setupmode = self.scycfg.args.setupmode
 
         if task.uses_sby:
             # generate sby
             taskcfg = gen_sby(task, self.sbycfg, self.scycfg,
                               self.add_cells, self.enable_cells)
-            task_sby = os.path.join(f"{workdir}", 
-                                    f"{task.dir}.sby")
+            task_sby = workdir / f"{task.dir}.sby"
             print(f"Generating {task_sby}")
             with open(task_sby, 'w') as sbyfile:
                 taskcfg.dump(sbyfile)
