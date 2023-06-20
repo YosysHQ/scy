@@ -44,7 +44,6 @@ def test_mintree_exists(mintree):
         ("len(x)", [4, 2, 1, 1]),
         ("len(x.children)", [2, 1, 0, 0]),
         ("len(list(x.traverse()))", [4, 2, 1, 1]),
-        ("x.is_runnable", [True]*4)
 ])
 def test_mintree_vals(mintree: TaskTree, xfunc, expected: list):
     assert get_tree_list(lambda x: eval(xfunc), mintree) == expected
@@ -133,15 +132,22 @@ def test_bad_stmt():
 
     assert isinstance(task_tree, str)
 
-# This test might be less of a "does the code do what we want" 
-#   and more "if the code changes, this test will fail"
-def test_no_colon():
-    task_tree = first_tree_from_string(dedent("""\
+@pytest.fixture
+def no_colon():
+    return TaskTree.from_string(dedent("""\
         cover a
             cover b
     """))
 
+def test_no_colon_len(no_colon):
+    assert len(no_colon) == 1
+
+def test_no_colon_tree_len(no_colon):
+    task_tree = no_colon[0]
     assert len(task_tree) == 1
+
+def test_no_colon_name(no_colon):
+    task_tree = no_colon[0]
     assert task_tree.name == "a"
 
 @pytest.fixture
@@ -183,14 +189,78 @@ def test_update_children_enable_cells_len(enable_tree_with_cell, recurse):
     else:
         assert tree_lens == [1, 1, 2, 1]
 
-@pytest.mark.parametrize("input_str", [
-        dedent("""
-            cover a:
-                cover b
-            cover c:
-                cover d
-        """)
+@pytest.fixture
+def double_root_covers():
+    return TaskTree.from_string(dedent("""\
+        cover a:
+            cover b
+        cover c:
+            cover d
+    """))
+
+def test_double_root_len(double_root_covers: "list[TaskTree|str]"):
+    assert len(double_root_covers) == 2
+
+def test_double_root_trees(double_root_covers: "list[TaskTree|str]"):
+    for tree in double_root_covers:
+        assert isinstance(tree, TaskTree)
+
+@pytest.mark.parametrize("input_a,input_b,count", [
+    ("cover a:\n\tcover b", "cover c:\n\tcover d", 4),
+    ("cover a\ncover b", "cover c:\n\tcover d", 3),
+    ("cover a:\n\tcover b", "cover c\ncover d", 4),
+    ("cover a", "cover b\nstring\ncover c", 3),
 ])
-def test_multiple_root(input_str: str):
-    task_tree = TaskTree.from_string(input_str)
-    assert len(task_tree) == 2
+def test_add_children(input_a: str, input_b: str, count: int):
+    tree_a = first_tree_from_string(input_a)
+    tree_a.add_children(TaskTree.from_string(input_b))
+    assert len(tree_a) == count
+
+@pytest.mark.parametrize([
+     "input_str",           "prop",                     "expected",    "child"
+    ], [
+    ("cover a",             "is_root",                  True,           False),
+    ("cover a:\n cover b",  "is_root",                  False,          True),
+    ("cover a",             "is_leaf",                  True,           False),
+    ("cover a:\n cover b",  "is_leaf",                  False,          False),
+    ("cover a:\n cover b",  "is_leaf",                  True,           True),
+    ("cover a",             "is_common",                False,          False),
+    ("cover a",             "uses_sby",                 True,           False),
+    ("trace a",             "uses_sby",                 False,          False),
+    ("cover a",             "makes_dir",                True,           False),
+    ("trace a",             "makes_dir",                False,          False),
+    ("cover a",             "is_runnable",              True,           False),
+    ("trace a",             "is_runnable",              True,           False),
+    ("append a",            "is_runnable",              False,          False),
+    ("cover a",             "has_local_enable_cells",   False,          False),
+    ("cover a:\n enable a", "has_local_enable_cells",   True,           False),
+    ("cover a:\n disable a","has_local_enable_cells",   True,           False),
+    ("cover a",             "tracestr",                 "trace001",     False),
+    ("cover a:\n cover b",  "tracestr",                 "trace002",     True),
+    ("cover a:\n\n cover b","tracestr",                 "trace003",     True),
+    ("cover a",             "linestr",                  "L001_000",     False),
+    ("cover a:\n cover b",  "linestr",                  "L002_001",     True),
+    ("cover a",             "dir",                      "L001_000_a",   False),
+    ("cover a:\n cover b",  "dir",                      "L002_001_b",   True),
+    ("cover a",             "children",                  [],            False),
+    ("cover a",             "parent",                    None,          False),
+])
+def test_statement_properties(input_str, prop, expected, child):
+    task_tree = first_tree_from_string(input_str)
+    if child:
+        task_tree = task_tree.children[0]
+    actual = getattr(task_tree, prop)
+    assert actual == expected
+
+@pytest.mark.parametrize([
+     "input_str",           "func",         "expected",     "child"
+    ], [
+    ("cover a:\n trace b",  "get_dir()",    "L001_000_a",   False),
+    ("cover a:\n trace b",  "get_dir()",    "L001_000_a",   True),
+])
+def test_statement_callable(input_str, func, expected, child):
+    task_tree = first_tree_from_string(input_str)
+    if child:
+        task_tree = task_tree.children[0]
+    actual = eval(f"task_tree.{func}")
+    assert actual == expected
