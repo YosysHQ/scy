@@ -58,7 +58,7 @@ def parse_common_sby(common_task: TaskTree, sbycfg: SBYBridge, scycfg: SCYConfig
                             f"setattr -set scy_line {line}  w:{cell['lhs']} %co c:$auto$add* %i"])
     for hdlname in enable_cells.keys():
         select = f"w:*:*_EN c:{hdlname} %ci:+[EN] %i"
-        sbycfg.script.append(f"setattr -set scy_line 0 -set hdlname:{hdlname} 1 {select}")
+        sbycfg.script.append(f"setattr -set scy_line 0 -set hdlname:{hdlname} 1 -set keep 1 {select}")
     if add_cells or enable_cells:
         add_log = "add_cells.log"
         sbycfg.script.append(f"tee -o {add_log} printattrs a:scy_line")

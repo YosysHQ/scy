@@ -116,7 +116,7 @@ def cmd_args():
 
 @pytest.mark.parametrize("test", [
         {"name": "pass", "data": ["1", " 2", "  3"], "chunks": [1, 1, 1]},
-        #{"name": "pass_seq", "data": ["1", "2", "3"], "chunks": [1, 2, 3]},
+        {"name": "pass_seq", "data": ["1", "2", "3"], "chunks": [1, 2, 3]},
         {"name": "chunks", "data": ["2", " 7", "  9", "  6"], "chunks": [2, 5, 2, 1]},
         {"name": "chunks_reset", "data": ["6", " 3", "  2", " 2"], "chunks": [6, 3, 1, 3]},
         {"name": "fail_depth", "data": ["1", " 2", "  3", "  44"], "failure": "sby"},
@@ -151,13 +151,67 @@ class TestExecClass:
             assert scy_chunks == test["chunks"]
 
 @pytest.mark.parametrize("test", [
-        {"name":      "simple", "data": ["4", " 12", " 14", "  12"]},
-        {"name":  "good_trace", "sequence": ["cover cp_4:", " trace now:"],
-                                "data": ["4"]},
+        {"name": "simple", "data": ["4", " 12", " 14", "  12"]},
+        {"name": "good_trace", "sequence": ["cover cp_4:", " trace now:"],
+                 "data": ["4"]},
+        {"name": "add_reverse","sequence": ["cover cp_254:",
+                                            " add assume reverse:",
+                                            "  cover cp_253"],
+                 "cover_stmts": ["\tif (!reset) begin",
+                                 "\t\tcp_253: cover(count==253);",
+                                 "\t\tcp_254: cover(count==254);",
+                                 "\tend"],
+                 "chunks": [2, 1]},
+        {"name": "force_reset", "sequence": ["cover cp_4:", 
+                                             " cover cp_3",
+                                             "cover cp_3"],
+                 "cover_stmts": ["\tno_reverse: assume (!reverse);"
+                                 "\tif (!reset) begin",
+                                 "\t\tcp_3: cover(count==3);",
+                                 "\t\tcp_4: cover(count==4);",
+                                 "\tend"],
+                 "chunks": [4, 4, 3]},
+        {"name": "no_forced_reset", "sequence": ["cover cp_4:", 
+                                                 " disable no_reverse:",
+                                                 "  cover cp_3",
+                                                 " cover cp_3:",
+                                                 "  disable no_reverse",
+                                                 "cover cp_3"],
+                 "cover_stmts": ["\tno_reverse: assume (!reverse);"
+                                 "\tif (!reset) begin",
+                                 "\t\tcp_3: cover(count==3);",
+                                 "\t\tcp_4: cover(count==4);",
+                                 "\tend"],
+                 "chunks": [4, 1, 1, 3]},
 ], scope="class")
 class TestComplexClass:
-    def test_runs(self, test: "dict[str, str | list]", scy_exec: subprocess.CompletedProcess):
+    def test_runs(self, scy_exec: subprocess.CompletedProcess):
         scy_exec.check_returncode()
+
+    @pytest.mark.usefixtures("scy_exec")
+    def test_files(self, test: "dict[str, str|list[str]]", scy_dir: Path, scy_cfg: Path):
+        assert test["name"] in scy_dir.name
+        if "sequence" in test:
+            output_dir = scy_dir / scy_cfg.stem
+            output_files = [f.name for f in output_dir.glob("*")]
+            for stmt in test["sequence"]:
+                found_match = False
+                name = stmt.split()[-1].strip(':')
+                if "cover" in stmt:
+                    match_str = f"{name}.sby"
+                elif "trace" in stmt:
+                    match_str = f"{name}.vcd"
+                else:
+                    continue
+                for file in output_files:
+                    if match_str in file:
+                        found_match = True
+                        break
+                assert found_match, f"{match_str} not found in {output_files}"
+
+    def test_chunks(self, test: "dict[str]", scy_chunks: "list[int]"):
+        if "chunks" in test:
+            assert scy_chunks == test["chunks"]
 
 @pytest.mark.parametrize("test", [
         {"name":  "trace_root", "sequence": ["trace now:", "cover cp_4:"],
