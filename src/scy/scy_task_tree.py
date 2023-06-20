@@ -20,7 +20,6 @@ def from_string(string: "SourceStr | str", L0: int = 0, depth: int = 0):
             continue
 
         d = m.groupdict()
-        print(d)
         # check for standalone body statements
         if d['stmt'] in ["enable", "disable"] and not d['body']:
             tree_list.append(tree_str)
