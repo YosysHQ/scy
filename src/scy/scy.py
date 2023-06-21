@@ -1,14 +1,12 @@
 #!/usr/bin/env python3
 
-import os, sys, re
-import asyncio
+import os, sys
 import shutil
 from scy.scy_cmdline import parser_func
 from scy.scy_config_parser import SCYConfig
 from scy.scy_sby_bridge import SBYBridge
 from scy.scy_task_runner import TaskRunner
 from yosys_mau import source_str
-import yosys_mau.task_loop.job_server as job
 
 from scy.scy_task_tree import TaskTree
 
