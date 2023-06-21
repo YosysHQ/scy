@@ -161,7 +161,10 @@ class TaskTree:
     
     @property
     def dir(self) -> str:
-        return f"{self.linestr}_{self.name}"
+        if self.is_common:
+            return "common"
+        else:
+            return f"{self.linestr}_{self.name}"
 
     def get_dir(self) -> str:
         if self.makes_dir:
