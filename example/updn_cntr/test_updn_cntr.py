@@ -222,7 +222,7 @@ class TestComplexClass:
                                 "error": "trace statement has children"},
         {"name":  "bad_parent", "sequence": ["cover cp_1:", " cover cp_2"],
                                 "data": [],
-                                "error": "SBY produced an error",},
+                                "error": "sby failed to generate",},
         {"name":     "bad_seq", "sequence": ["123", "abc"],
                                 "cover_stmts": ["", "//blank"],
                                 "error": "bad sequence"},
@@ -238,12 +238,17 @@ class TestErrorsClass:
             with pytest.raises(subprocess.CalledProcessError):
                 scy_exec.check_returncode()
 
-        try:
-            last_err = bytes.decode(scy_exec.stderr).splitlines().pop()
-        except IndexError:
-            last_err = ""
+        stderr = bytes.decode(scy_exec.stderr)
+        exception_regex = r"^(?P<e>.*): (?P<m>.*)$"
+        exceptions = re.findall(exception_regex, stderr, flags=re.MULTILINE)
 
-        assert test["error"] in last_err
+        found_exception = False
+        for _, m in exceptions:
+            if test["error"] in m:
+                found_exception = True
+                break
+
+        assert found_exception, f"{test['error']} not found in {exceptions}"
 
 @pytest.mark.parametrize("test", [
         {"name":   "no_covers", "sequence": ["cover cp_1:", ""],

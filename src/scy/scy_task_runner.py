@@ -2,6 +2,8 @@ import os
 import json
 import re
 from pathlib import Path
+from typing import cast
+
 from scy.scy_task_tree import TaskTree
 from scy.scy_config_parser import SCYConfig
 from scy.scy_sby_bridge import (
@@ -47,7 +49,7 @@ def gen_traces(task: TaskTree) -> "list[str]":
 def on_sby_exit(event: tl.process.ExitEvent):
     if event.returncode != 0:
         if isinstance(event.source, tl.ProcessTask):
-            event_task = (tl.ProcessTask)(event.source)
+            event_task = cast(tl.ProcessTask, event.source)
             event_sby = Path(event_task.command[-1])
             event_dir = Path(event_task.cwd)
             error_str = f"{event_sby} failed to generate, see {event_dir / event_sby.stem / 'logfile.txt'} for more info"
