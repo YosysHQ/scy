@@ -115,48 +115,20 @@ def cmd_args():
     return []
 
 @pytest.mark.parametrize("test", [
-        {"name": "pass", "data": ["1", " 2", "  3"], "chunks": [1, 1, 1]},
-        {"name": "pass_seq", "data": ["1", "2", "3"], "chunks": [1, 2, 3]},
-        {"name": "chunks", "data": ["2", " 7", "  9", "  6"], "chunks": [2, 5, 2, 1]},
-        {"name": "chunks_reset", "data": ["6", " 3", "  2", " 2"], "chunks": [6, 3, 1, 3]},
-        {"name": "fail_depth", "data": ["1", " 2", "  3", "  44"], "failure": "sby"},
-        {"name": "fail_data", "data": [], "failure": "scy"},
-], scope="class")
-class TestExecClass:
-    def test_runs(self, test: "dict[str]", scy_exec: subprocess.CompletedProcess):
-        failure = test.get("failure")
-        if failure == "sby":
-            assert scy_exec.returncode
-        elif failure == "scy":
-            assert scy_exec.returncode
-        else:
-            scy_exec.check_returncode()
-
-    @pytest.mark.usefixtures("scy_exec")
-    def test_files(self, test: "dict[str]", scy_dir: Path, scy_cfg: Path):
-        assert test["name"] in scy_dir.name
-        output_dir = scy_dir / scy_cfg.stem
-        output_files = [f.name for f in output_dir.glob("*.sby")]
-        for count in test["data"]:
-            found_match = False
-            match_str = f"cp_{count.strip()}"
-            for file in output_files:
-                if match_str in file:
-                    found_match = True
-                    break
-            assert found_match, f"{match_str} not found in {output_files}"
-
-    def test_chunks(self, test: "dict[str]", scy_chunks: "list[int]"):
-        if "chunks" in test:
-            assert scy_chunks == test["chunks"]
-
-@pytest.mark.parametrize("test", [
+        {"name": "pass", "data": ["1", " 2", "  3"],
+                 "chunks": [1, 1, 1]},
+        {"name": "pass_seq", "data": ["1", "2", "3"],
+                 "chunks": [1, 2, 3]},
+        {"name": "chunks", "data": ["2", " 7", "  9", "  6"],
+                 "chunks": [2, 5, 2, 1]},
+        {"name": "chunks_reset", "data": ["6", " 3", "  2", " 2"],
+                 "chunks": [6, 3, 1, 3]},
         {"name": "simple", "data": ["4", " 12", " 14", "  12"]},
         {"name": "good_trace", "sequence": ["cover cp_4:", " trace now:"],
                  "data": ["4"]},
-        {"name": "add_reverse","sequence": ["cover cp_254:",
-                                            " add assume reverse:",
-                                            "  cover cp_253"],
+        {"name": "add_reverse", "sequence": ["cover cp_254:",
+                                             " add assume reverse:",
+                                             "  cover cp_253"],
                  "cover_stmts": ["\tif (!reset) begin",
                                  "\t\tcp_253: cover(count==253);",
                                  "\t\tcp_254: cover(count==254);",
@@ -229,6 +201,9 @@ class TestComplexClass:
         {"name":    "bad_seq2", "sequence": ["", ""],
                                 "cover_stmts": ["", "//blank"],
                                 "error": "no cover sequences"},
+        {"name":  "fail_depth", "data": ["1", " 2", "  3", "  44"],
+                                "error": "sby failed to generate"},
+        {"name":   "fail_data", "data": [], "error": "no cover sequences"},
 ], scope="class")
 class TestErrorsClass:
     def test_runs(self, test: "dict[str, str | list]", scy_exec: subprocess.CompletedProcess):
