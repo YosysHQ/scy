@@ -1,5 +1,8 @@
+import copy
 import os
+from pathlib import Path
 from scy.scy_config_parser import SCYConfig
+from scy.scy_task_tree import TaskTree
 
 def from_scycfg(scycfg: SCYConfig):
     sbycfg = SBYBridge()
@@ -90,3 +93,100 @@ class SBYBridge():
                 self.data.pop(key)
     
     from_scycfg = staticmethod(from_scycfg)
+
+def parse_common_sby(common_task: TaskTree, sbycfg: SBYBridge, scycfg: SCYConfig):
+    assert common_task.is_common, "expected tree root to be common.sby generation"
+
+    # preparse tree to extract cell generation
+    add_cells: "dict[int, dict[str]]" = {}
+    enable_cells: "dict[str, dict[str, str | bool]]" = {}
+    def add_enable_cell(hdlname: str, stmt: str):
+        enable_cells.setdefault(hdlname, {"disable": "1'b0"})
+        enable_cells[hdlname][f"does_{stmt}"] = True
+
+    for task in common_task.traverse():
+        if task.stmt == "add":
+            if task.name not in ["assert", "assume", "live", "fair", "cover"]:
+                raise NotImplementedError(f"cell type {task.name!r} on line {task.line}")
+            add_cells[task.line] = {"type": task.name}
+            add_cells[task.line].update(task.get_asgmt())
+        elif task.stmt in ["enable", "disable"]:
+            add_enable_cell(task.name, task.stmt)
+        elif task.body:
+            for line in task.body.split('\n'):
+                try:
+                    stmt, hdlname = line.split()
+                except ValueError:
+                    continue
+                if stmt in ["enable", "disable"]:
+                    add_enable_cell(hdlname, stmt)
+
+    # add cells to sby script
+    add_log = None
+    for (line, cell) in add_cells.items():
+        sbycfg.script.extend([f"add -{cell['type']} {cell['lhs']} # line {line}",
+                            f"setattr -set scy_line {line}  w:{cell['lhs']} %co c:$auto$add* %i"])
+    for hdlname in enable_cells.keys():
+        select = f"w:*:*_EN c:{hdlname} %ci:+[EN] %i"
+        sbycfg.script.append(f"setattr -set scy_line 0 -set hdlname:{hdlname} 1 -set keep 1 {select}")
+    if add_cells or enable_cells:
+        add_log = "add_cells.log"
+        sbycfg.script.append(f"tee -o {add_log} printattrs a:scy_line")
+        add_log = Path(scycfg.args.workdir) / "common" / "src" / add_log
+
+    return (add_log, add_cells, enable_cells)
+
+def gen_sby(task: TaskTree, sbycfg: SBYBridge, scycfg: SCYConfig,
+            add_cells: "dict[int, dict[str]]", 
+            enable_cells: "dict[str, dict[str, str | bool]]"):
+
+    sbycfg = copy.deepcopy(sbycfg)
+
+    if not task.is_root and not task.parent.is_common:
+        # child nodes depend on parent
+        parent = task.parent
+        parent_trace = os.path.join(parent.get_dir(),
+                                 "engine_0",
+                                 f"trace0.{scycfg.options.trace_ext}")
+        traces = [os.path.join(parent.get_dir(),
+                               "src", 
+                               trace.split()[0]) for trace in task.traces[:-1]]
+        sbycfg.files.extend(traces + [f"{parent.tracestr}.{scycfg.options.trace_ext} {parent_trace}"])
+
+    # configure additional cells
+    pre_sim_commands = []
+    post_sim_commands = []
+    for cell in add_cells.values():
+        en_sig = '1' if cell["cell"] in task.enable_cells else '0'
+        pre_sim_commands.append(f"connect -port {cell['cell']} \\EN 1'b{en_sig}")
+    for hdlname in enable_cells.keys():
+        task_cell = task.enable_cells.get(hdlname, None)
+        if task.has_local_enable_cells:
+            for line in task.body.split('\n'):
+                if hdlname in line:
+                    task_cell = enable_cells[hdlname].copy()
+                    task_cell["status"] = line.split()[0]
+                    break
+        if task_cell:
+            status = task_cell["status"]
+            pre_sim_commands.append(f"connect -port {hdlname} \\EN {task_cell[status]}")
+            if status == "enable":
+                post_sim_commands.append(f"chformal -skip 1 c:{hdlname}")
+    sbycfg.script.extend(pre_sim_commands)
+
+    # replay prior traces and enable only relevant cover
+    traces_script = []
+    for trace in task.traces:
+        if scycfg.options.replay_vcd:
+            trace_scope = f" -scope {scycfg.options.design_scope}" 
+        else:
+            trace_scope = ""
+        traces_script.append(f"sim -w -r {trace}{trace_scope}")
+    if task.stmt == "cover":
+        traces_script.append(f"delete t:$cover c:{task.name} %d")
+        sbycfg.script.extend(traces_script)
+    else:
+        raise NotImplementedError(task.stmt)
+    sbycfg.script.extend(post_sim_commands)
+
+    return sbycfg
