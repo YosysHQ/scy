@@ -65,7 +65,7 @@ class SingleTreeTask(tl.Task):
         self.recurse = recurse
 
     async def on_run(self):
-        return self.runner.run_task(self.task, self.recurse)
+        return self.runner._run_task_loop(self.task, self.recurse)
 
 class TaskRunner():
     def __init__(self, sbycfg: SBYBridge, scycfg: SCYConfig):
@@ -86,6 +86,9 @@ class TaskRunner():
 
     def run_tree(self):
         tl.run_task_loop(self._run_tree_loop)
+
+    def run_task(self, task: TaskTree, recurse=True):
+        tl.run_task_loop(lambda:self._run_task_loop(task, recurse))
 
     def _run_children(self, children: "list[TaskTree]", blocker: "tl.Task", recurse: bool):
         for child in children:
@@ -158,7 +161,7 @@ class TaskRunner():
 
         self._run_children(common_task.children, root_task, True)
 
-    def run_task(self, task: TaskTree, recurse=True):
+    def _run_task_loop(self, task: TaskTree, recurse=True):
         task_trace = None
         workdir = Path(self.scycfg.args.workdir)
         setupmode = self.scycfg.args.setupmode

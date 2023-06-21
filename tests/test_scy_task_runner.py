@@ -8,6 +8,7 @@ from scy.scy_sby_bridge import SBYBridge
 import pytest
 
 from scy.scy_task_tree import TaskTree
+import yosys_mau.task_loop as tl
 
 @pytest.fixture(params=["setup", "run"])
 def scycfg_upcnt(tmp_path, request: pytest.FixtureRequest):
@@ -110,3 +111,22 @@ def test_tree_respects_setup(scytr_upcnt: scytr.TaskRunner):
                 assert task.dir in sby_dirs
                 sby_dirs.remove(task.dir)
     assert not sby_dirs
+
+def test_run_task(scytr_upcnt: scytr.TaskRunner):
+    scytr_upcnt.sbycfg.options.append("mode cover")
+    root_task = scytr_upcnt.scycfg.sequence[0]
+    scytr_upcnt.run_task(root_task, recurse=False)
+    assert True
+
+def test_run_task_nomode(scytr_upcnt: scytr.TaskRunner):
+    try:
+        scytr_upcnt.sbycfg.options.remove("mode cover")
+    except ValueError:
+        pass
+    root_task = scytr_upcnt.scycfg.sequence[0]
+    if scytr_upcnt.scycfg.args.setupmode:
+        scytr_upcnt.run_task(root_task, recurse=False)
+        assert True
+    else:
+        with pytest.raises(tl.TaskFailed):
+            scytr_upcnt.run_task(root_task, recurse=False)
