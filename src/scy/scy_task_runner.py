@@ -8,6 +8,7 @@ from scy.scy_task_tree import TaskTree
 from scy.scy_config_parser import SCYConfig
 from scy.scy_sby_bridge import SBYBridge
 
+import yosys_mau.task_loop as tl
 import yosys_mau.task_loop.job_server as job
 
 async def runner(client: job.Client, exe_args: "list[str]", workdir: "str | Path"):
@@ -152,20 +153,40 @@ def gen_traces(task: TaskTree) -> "list[str]":
     traces.reverse()
     return traces
 
+def on_sby_exit(event: tl.process.ExitEvent):
+    if event.returncode != 0:
+        if isinstance(event.source, tl.ProcessTask):
+            event_task = (tl.ProcessTask)(event.source)
+            event_sby = Path(event_task.command[-1])
+            event_dir = Path(event_task.cwd)
+            error_str = f"{event_sby} failed to generate, see {event_dir / event_sby.stem / 'logfile.txt'} for more info"
+        else:
+            error_str = "sby returned an error"
+        raise RuntimeError(error_str)
+
 class TaskRunner():
-    def __init__(self, sbycfg: SBYBridge, scycfg: SCYConfig, client: job.Client):
+    def __init__(self, sbycfg: SBYBridge, scycfg: SCYConfig):
         self.sbycfg = sbycfg
         self.scycfg = scycfg
-        self.client = client
         self.add_cells: "dict[int, dict[str]]" = {}
         self.enable_cells: "dict[str, dict[str, str | bool]]" = {}
         self.task_steps: "dict[str, int]" = {}
+        self.client = job.global_client(scycfg.args.jobcount)
+        print(f"Using {self.client._job_count} job slots")
 
-    async def run_tree(self):
-        p_all = []
+    async def handle_cover_output(self, lines):
+        steps_regex = r"^.*\[(?P<task>.*)\].*(?:reached).*step (?P<step>\d+)$"
+        async for line_event in lines:
+            step_match = re.match(steps_regex, line_event.output)
+            if step_match:
+                self.task_steps[step_match['task']] = int(step_match['step'])
+
+    def run_tree(self):
+        tl.TaskLoop(self._run_tree_loop)
+
+    def _run_tree_loop(self):
         common_task = self.scycfg.root
         workdir = Path(self.scycfg.args.workdir)
-
         (add_log, self.add_cells, self.enable_cells) = parse_common_sby(common_task, self.sbycfg, self.scycfg)
 
         # use sby to prepare input
@@ -176,9 +197,8 @@ class TaskRunner():
             self.sbycfg.dump_common(sbyfile)
 
         sby_args = ["sby", "common.sby"]
-        p = await runner(self.client, sby_args, workdir)
-        assert not p.returncode, f"common.sby failed to generate, see {workdir / 'common' / 'logfile.txt'} for more info"
-        p_all.append(p)
+        root_task = tl.ProcessTask(sby_args, workdir)
+        root_task.events(tl.process.ExitEvent).handle(on_sby_exit)
 
         if self.scycfg.options.replay_vcd and not self.scycfg.options.design_scope:
             # load top level design name back from generated model
@@ -190,7 +210,7 @@ class TaskRunner():
                                                 "try setting the 'design_scope' option")
             self.scycfg.options.design_scope = design["modules"][0]["name"]
 
-        if add_log:
+        def parse_add_log():
             # load back added cells
             with open(add_log, 'r') as f:
                 cell_dump = f.read()
@@ -207,34 +227,36 @@ class TaskRunner():
                             if line:
                                 self.add_cells[line]["cell"] = cell
 
+            for name, vals in self.enable_cells.items():
+                task_cell = self.enable_cells[name].copy()
+                if not vals.get("does_enable", False):
+                    task_cell["status"] = "enable"
+                    common_task.add_enable_cell(name, task_cell)
+                elif not vals.get("does_disable", False):
+                    task_cell["status"] = "disable"
+                    common_task.add_enable_cell(name, task_cell)
+
+            common_task.update_children_enable_cells(recurse=False)
+
+        if add_log:
+            parse_adds_task = tl.Task(on_run=parse_add_log)
+            parse_adds_task.depends_on(root_task)
+            root_task = parse_adds_task
+
         # modify config for full sby runs
         common_il = os.path.join('common', 'model', 'design_prep.il')
         self.sbycfg.prep_shared(common_il)
 
-        for name, vals in self.enable_cells.items():
-            task_cell = self.enable_cells[name].copy()
-            if not vals.get("does_enable", False):
-                task_cell["status"] = "enable"
-                common_task.add_enable_cell(name, task_cell)
-            elif not vals.get("does_disable", False):
-                task_cell["status"] = "disable"
-                common_task.add_enable_cell(name, task_cell)
+        for child in common_task.children:
+            child_caller = ChildCaller(self, child)
+            child_task = tl.Task(on_run=child_caller.run)
+            child_task.depends_on(root_task)
 
-        common_task.update_children_enable_cells(recurse=False)
-
-        childrenp = await asyncio.gather(
-            *[self.run_task(child) for child in common_task.children]
-        )
-        for childp in childrenp:
-            p_all.extend(childp)
-
-        return p_all
-
-    async def run_task(self, task: TaskTree, recurse=True):
-        p_all = []
+    def run_task(self, task: TaskTree, recurse=True):
         task_trace = None
         workdir = Path(self.scycfg.args.workdir)
         setupmode = self.scycfg.args.setupmode
+        root_task = None
 
         if task.uses_sby:
             # generate sby
@@ -248,9 +270,9 @@ class TaskRunner():
             if not setupmode:
                 # run sby
                 sby_args = ["sby", "-f", f"{task.dir}.sby"]
-                p = await runner(self.client, sby_args, workdir)
-                assert not p.returncode, f"SBY produced an error, see {workdir / task.dir / 'logfile.txt'} for more info"
-                p_all.append(p)
+                root_task = tl.ProcessTask(sby_args, workdir)
+                root_task.events(tl.process.ExitEvent).handle(on_sby_exit)
+                root_task.events(tl.process.OutputEvent).process(self.handle_cover_output)
         elif task.stmt == "trace":
             if self.scycfg.options.replay_vcd:
                 raise NotImplementedError(f"replay_vcd option with trace statement on line {task.line}")
@@ -269,17 +291,14 @@ class TaskRunner():
 
                 # now use yosys to replay trace and generate vcd
                 yw_args.append(f"{task.name}.yw")
-                p = await runner(self.client, yw_args, workdir)
-                assert not p.returncode
-                p_all.append(p)
+                yw_proc = tl.ProcessTask(yw_args, workdir)
                 common_il = self.sbycfg.files[0].split()[-1]
                 yosys_args = [
                     "yosys", "-p", 
                     f"read_rtlil {common_il}; sim -hdlname -r {task.name}.yw -vcd {task.name}.vcd"
                 ]
-                p = await runner(self.client, yosys_args, workdir)
-                assert not p.returncode
-                p_all.append(p)
+                yosys_proc = tl.ProcessTask(yosys_args, workdir)
+                yosys_proc.depends_on(yw_proc)
         elif task.stmt == "append":
             if self.scycfg.options.replay_vcd:
                 raise NotImplementedError(f"replay_vcd option with append statement on line {task.line}")
@@ -299,14 +318,20 @@ class TaskRunner():
 
         # add traces to children
         task.update_children_traces(task_trace)
-        task.update_children_enable_cells(recurse=False)
+        task.update_children_enable_cells(recurse=False)            
 
         if recurse:
-            childrenp = await asyncio.gather(
-                *[self.run_task(child, recurse) for child in task.children]
-            )
-            for childp in childrenp:
-                p_all.extend(childp)
+            for child in task.children:
+                child_caller = ChildCaller(self, child)
+                child_task = tl.Task(on_run=child_caller.run)
+                if root_task:
+                    child_task.depends_on(root_task)
 
-        return p_all
+# This can't be right
+class ChildCaller:
+    def __init__(self, runner: TaskRunner, child: TaskTree):
+        self.runner = runner
+        self.child = child
 
+    def run(self):
+        self.runner.run_task(self.child)

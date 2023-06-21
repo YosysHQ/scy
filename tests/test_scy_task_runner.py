@@ -35,6 +35,7 @@ def scycfg_upcnt(tmp_path, request: pytest.FixtureRequest):
     scycfg = SCYConfig(contents)
     scycfg.args = ns(workdir=tmp_path)
     scycfg.args.setupmode = request.param == "setup"
+    scycfg.args.jobcount = None
     return scycfg
 
 @pytest.fixture
@@ -44,7 +45,7 @@ def sbycfg_upcnt(scycfg_upcnt):
 
 @pytest.fixture
 def scytr_upcnt(sbycfg_upcnt: SBYBridge, scycfg_upcnt: SCYConfig):
-    return scytr.TaskRunner(sbycfg_upcnt, scycfg_upcnt, client=None)
+    return scytr.TaskRunner(sbycfg_upcnt, scycfg_upcnt)
 
 def test_setup(scytr_upcnt: scytr.TaskRunner):
     scycfg = scytr_upcnt.scycfg
