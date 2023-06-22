@@ -85,7 +85,7 @@ def scytr_upcnt_with_common(scytr_upcnt: scytr.TaskRunner):
 
 @pytest.fixture
 def run_tree(scytr_upcnt_with_common: scytr.TaskRunner):
-    scytr_upcnt_with_common.run_tree()
+    scytr_upcnt_with_common._run_tree_loop()
 
 @pytest.mark.usefixtures("run_tree")
 def test_tree_makes_sby(scytr_upcnt: scytr.TaskRunner):
@@ -115,7 +115,7 @@ def test_tree_respects_setup(scytr_upcnt: scytr.TaskRunner):
 def test_run_task(scytr_upcnt: scytr.TaskRunner):
     scytr_upcnt.sbycfg.options.append("mode cover")
     root_task = scytr_upcnt.scycfg.sequence[0]
-    scytr_upcnt.run_task(root_task, recurse=False)
+    scytr_upcnt._run_task_loop(root_task, recurse=False)
     assert True
 
 def test_run_task_nomode(scytr_upcnt: scytr.TaskRunner):
@@ -125,8 +125,8 @@ def test_run_task_nomode(scytr_upcnt: scytr.TaskRunner):
         pass
     root_task = scytr_upcnt.scycfg.sequence[0]
     if scytr_upcnt.scycfg.args.setupmode:
-        scytr_upcnt.run_task(root_task, recurse=False)
+        scytr_upcnt._run_task_loop(root_task, recurse=False)
         assert True
     else:
         with pytest.raises(tl.TaskFailed):
-            scytr_upcnt.run_task(root_task, recurse=False)
+            scytr_upcnt._run_task_loop(root_task, recurse=False)

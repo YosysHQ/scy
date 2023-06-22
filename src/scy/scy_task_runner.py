@@ -13,7 +13,6 @@ from scy.scy_sby_bridge import (
 )
 
 import yosys_mau.task_loop as tl
-import yosys_mau.task_loop.job_server as job
 
 def gen_traces(task: TaskTree) -> "list[str]":
     # reversing trace order means that the most recent trace will be first
@@ -65,7 +64,7 @@ class SingleTreeTask(tl.Task):
         self.recurse = recurse
 
     async def on_run(self):
-        return self.runner._run_task_loop(self.task, self.recurse)
+        return self.runner.run_task(self.task, self.recurse)
 
 class TaskRunner():
     def __init__(self, sbycfg: SBYBridge, scycfg: SCYConfig):
@@ -74,8 +73,6 @@ class TaskRunner():
         self.add_cells: "dict[int, dict[str]]" = {}
         self.enable_cells: "dict[str, dict[str, str | bool]]" = {}
         self.task_steps: "dict[str, int]" = {}
-        self.client = job.global_client(scycfg.args.jobcount)
-        print(f"Using {self.client._job_count} job slots")
 
     async def handle_cover_output(self, lines):
         steps_regex = r"^.*\[(?P<task>.*)\].*(?:reached).*step (?P<step>\d+)$"
@@ -84,11 +81,11 @@ class TaskRunner():
             if step_match:
                 self.task_steps[step_match['task']] = int(step_match['step'])
 
-    def run_tree(self):
-        tl.run_task_loop(self._run_tree_loop)
+    def _run_tree_loop(self):
+        tl.run_task_loop(self.run_tree)
 
-    def run_task(self, task: TaskTree, recurse=True):
-        tl.run_task_loop(lambda:self._run_task_loop(task, recurse))
+    def _run_task_loop(self, task: TaskTree, recurse=True):
+        tl.run_task_loop(lambda:self.run_task(task, recurse))
 
     def _run_children(self, children: "list[TaskTree]", blocker: "tl.Task", recurse: bool):
         for child in children:
@@ -96,7 +93,7 @@ class TaskRunner():
             if blocker:
                 child_task.depends_on(blocker)
 
-    def _run_tree_loop(self):
+    def run_tree(self):
         common_task = self.scycfg.root
         workdir = Path(self.scycfg.args.workdir)
         (add_log, self.add_cells, self.enable_cells) = parse_common_sby(common_task, self.sbycfg, self.scycfg)
@@ -161,7 +158,7 @@ class TaskRunner():
 
         self._run_children(common_task.children, root_task, True)
 
-    def _run_task_loop(self, task: TaskTree, recurse=True):
+    def run_task(self, task: TaskTree, recurse=True):
         task_trace = None
         workdir = Path(self.scycfg.args.workdir)
         setupmode = self.scycfg.args.setupmode
