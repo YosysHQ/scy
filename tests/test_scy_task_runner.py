@@ -10,7 +10,7 @@ import pytest
 from scy.scy_task_tree import TaskTree
 import yosys_mau.task_loop as tl
 
-@pytest.fixture(params=["setup", "run"])
+@pytest.fixture(params=["setup", "run", "replay_vcd"])
 def scycfg_upcnt(tmp_path, request: pytest.FixtureRequest):
     contents = dedent("""
             [design]
@@ -62,6 +62,7 @@ def scycfg_upcnt(tmp_path, request: pytest.FixtureRequest):
 
     """)
     scycfg = SCYConfig(contents)
+    scycfg.options.replay_vcd = request.param == "replay_vcd"
     scycfg.args = ns(workdir=tmp_path)
     scycfg.args.setupmode = request.param == "setup"
     scycfg.args.jobcount = None

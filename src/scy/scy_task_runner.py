@@ -93,6 +93,16 @@ class TaskRunner():
             if blocker:
                 child_task.depends_on(blocker)
 
+    def load_design(self):
+        workdir = Path(self.scycfg.args.workdir)
+        design_json = workdir / "common" / "model" / "design.json"
+        with open(design_json, 'r') as f:
+            design = json.load(f)
+
+        assert len(design["modules"]) == 1, ("expected one top level module, " 
+                                            "try setting the 'design_scope' option")
+        self.scycfg.options.design_scope = design["modules"][0]["name"]
+
     def run_tree(self):
         common_task = self.scycfg.root
         workdir = Path(self.scycfg.args.workdir)
@@ -111,13 +121,9 @@ class TaskRunner():
 
         if self.scycfg.options.replay_vcd and not self.scycfg.options.design_scope:
             # load top level design name back from generated model
-            design_json = workdir / "common" / "model" / "design.json"
-            with open(design_json, 'r') as f:
-                design = json.load(f)
-
-            assert len(design["modules"]) == 1, ("expected one top level module, " 
-                                                "try setting the 'design_scope' option")
-            self.scycfg.options.design_scope = design["modules"][0]["name"]
+            design_task = tl.Task(on_run=self.load_design)
+            design_task.depends_on(root_task)
+            root_task = design_task
 
         def parse_add_log():
             # load back added cells

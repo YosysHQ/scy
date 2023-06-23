@@ -98,7 +98,11 @@ def scy_dir(tmp_path_factory: pytest.TempPathFactory, test, request: pytest.Fixt
     return test_dir
 
 @pytest.fixture(scope="class")
-def scy_cfg(scy_dir, base_cfg: "dict[str, list[str]]", sequence, cover_stmts):
+def scy_cfg(scy_dir: Path, base_cfg: "dict[str, list[str]]", sequence, cover_stmts, 
+            test: "dict[str, str]"):
+    if "mkdir" in test:
+        new_dir = scy_dir / test["mkdir"]
+        new_dir.mkdir()
     test_cfg = base_cfg.copy()
     test_cfg["sequence"] = sequence
     test_cfg["file cover_stmts.vh"] = cover_stmts
@@ -111,8 +115,8 @@ def scy_cfg(scy_dir, base_cfg: "dict[str, list[str]]", sequence, cover_stmts):
     return cfg
 
 @pytest.fixture(scope="class")
-def cmd_args():
-    return []
+def cmd_args(test: "dict[str, list[str]]"):
+    return test.get("args", [])
 
 @pytest.mark.parametrize("test", [
         {"name": "pass", "data": ["1", " 2", "  3"],
@@ -155,6 +159,8 @@ def cmd_args():
                                  "\t\tcp_4: cover(count==4);",
                                  "\tend"],
                  "chunks": [4, 1, 1, 3]},
+        {"name": "good_dir", "data": ["1"],
+                 "args": ["-f", "-d", "this_dir"], "mkdir": "this_dir"},
 ], scope="class")
 class TestComplexClass:
     def test_runs(self, scy_exec: subprocess.CompletedProcess):
@@ -204,6 +210,9 @@ class TestComplexClass:
         {"name":  "fail_depth", "data": ["1", " 2", "  3", "  44"],
                                 "error": "sby failed to generate"},
         {"name":   "fail_data", "data": [], "error": "no cover sequences"},
+        {"name":     "bad_dir", "data": ["1"],
+                                "args": ["-d", "this_dir"], "mkdir": "this_dir",
+                                "error": "use -f to overwrite the existing directory"},
 ], scope="class")
 class TestErrorsClass:
     def test_runs(self, test: "dict[str, str | list]", scy_exec: subprocess.CompletedProcess):
@@ -245,3 +254,35 @@ class TestHandledErrorsClass:
             last_out = ""
 
         assert test["error"] in last_out
+
+@pytest.mark.parametrize("test", [
+        {"name": "baseline", "data": ["1", " 2", "  3"],
+                 "args": []},
+        {"name": "dump_tree", "data": ["1", " 2", "  3"],
+                 "args": ["--dumptree"]},
+        {"name": "setup_mode", "data": ["1", " 2", "  3"],
+                 "args": ["--setup"]},
+], scope="class")
+class TestArgsClass:
+    def test_runs(self, test: "dict[str, str | list]", scy_exec: subprocess.CompletedProcess):
+        scy_exec.check_returncode()
+    
+    @pytest.mark.usefixtures("scy_exec")
+    def test_files(self, test: "dict[str, str|list[str]]", scy_dir: Path, scy_cfg: Path):
+        output_dir = scy_dir / scy_cfg.stem
+        if "--dumptree" in test["args"]:
+            assert not output_dir.exists()
+            return
+        assert output_dir.exists()
+
+    def test_output(self, test: "dict[str, str | list]", sequence: "list[str]", scy_exec : subprocess.CompletedProcess):
+        scy_out = bytes.decode(scy_exec.stdout)
+        if "--dumptree" in test["args"]:
+            for stmt in sequence:
+                assert stmt.strip(' :') in scy_out
+            return
+        for stmt in ["Chunks:"]:
+            if "--setup" in test["args"]:
+                assert stmt not in scy_out
+            else:
+                assert stmt in scy_out

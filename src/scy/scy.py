@@ -61,13 +61,12 @@ class SCYTask():
     def gen_workdir(self):
         try:
             os.makedirs(self.args.workdir)
-        except FileExistsError as e:
+        except FileExistsError:
             if self.args.force:
                 shutil.rmtree(self.args.workdir, ignore_errors=True)
                 os.makedirs(self.args.workdir)
             else:
-                e.add_note(f"directory '{self.args.workdir}' already exists, use -f to overwrite the existing directory.")
-                raise e
+                raise RuntimeError(f"directory '{self.args.workdir}' already exists, use -f to overwrite the existing directory.",)
 
     def prep_sby(self):
         self.sbycfg = SBYBridge.from_scycfg(self.scycfg)
