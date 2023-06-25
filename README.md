@@ -8,6 +8,10 @@ The cover points themselves are SVA cover properties. Additional data-flow
 analysis properties and SVA restrict/assume properties can be used to further
 narrow the search space to certain traces.
 
+## Note on installation
+
+Currently requires [YosysHQ/sby at krys/scy_dev](https://github.com/yosyshq/sby/tree/krys/scy_dev>).
+
 ## Example SCY Project
 
 The `scy` command-line tool reads a `.scy` file that describes the design to check,
