@@ -161,6 +161,10 @@ def cmd_args(test: "dict[str, list[str]]"):
                  "chunks": [4, 1, 1, 3]},
         {"name": "good_dir", "data": ["1"],
                  "args": ["-f", "-d", "this_dir"], "mkdir": "this_dir"},
+        {"name": "empty_tree", "sequence": ["cover cp_4", "", "cover cp_3"],
+                 "data": ["4", "3"]},
+        {"name": "tree_comment", "sequence": ["cover cp_4", "#comment", "cover cp_3"],
+                 "data": ["4", "3"]},
 ], scope="class")
 class TestComplexClass:
     def test_runs(self, scy_exec: subprocess.CompletedProcess):
@@ -173,6 +177,8 @@ class TestComplexClass:
             output_dir = scy_dir / scy_cfg.stem
             output_files = [f.name for f in output_dir.glob("*")]
             for stmt in test["sequence"]:
+                if not stmt:
+                    continue
                 found_match = False
                 name = stmt.split()[-1].strip(':')
                 if "cover" in stmt:
@@ -185,7 +191,7 @@ class TestComplexClass:
                     if match_str in file:
                         found_match = True
                         break
-                assert found_match, f"{match_str} not found in {output_files}"
+                assert found_match, f"{match_str} not found in {output_files} for test {test['name']!r}"
 
     def test_chunks(self, test: "dict[str]", scy_chunks: "list[int]"):
         if "chunks" in test:

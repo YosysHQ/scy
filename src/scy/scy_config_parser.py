@@ -33,10 +33,9 @@ class SCYConfig(ConfigParser):
     def sequence (self, sequence: str) -> "list[TaskTree | str]":
         tree_list = TaskTree.from_string(sequence)
         for tree in tree_list:
-            if tree:
-                assert isinstance(tree, TaskTree), "bad sequence section"
-            else:
-                tree_list.remove(tree)
+            if isinstance(tree, str) and tree.startswith("#"):
+                continue
+            assert isinstance(tree, TaskTree), "bad sequence section"
         assert tree_list, "no cover sequences found"
         return tree_list
     design = StrSection(default="")

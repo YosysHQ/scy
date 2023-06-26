@@ -73,7 +73,7 @@ class SCYTask():
         self.sbycfg.fix_relative_paths("..")
 
         # add common sby generation task
-        self.scycfg.root = TaskTree("", "common", 0).add_children(self.scycfg.sequence)
+        self.scycfg.root = TaskTree.make_common(children=self.scycfg.sequence)
 
     def make_runner(self):
         self.task_runner = TaskRunner(self.sbycfg, self.scycfg)
@@ -82,7 +82,7 @@ class SCYTask():
         self.task_runner.run_tree()
 
     def display_stats(self):
-        trace_tasks = []
+        trace_tasks: "list[TaskTree]" = []
         print("Chunks:")
         for task in self.scycfg.root.traverse():
             if task.stmt == "trace":

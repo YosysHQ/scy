@@ -8,7 +8,7 @@ from yosys_mau.source_str import (
 def from_string(string: "SourceStr | str", L0: int = 0, depth: int = 0):
     if not isinstance(string, SourceStr):
         string = source_str.from_content(string, "dev/null")
-    nest_regex = r"^(?P<ws>[ \t]*)(.+(\n(?P=ws)\s+.*)*)"
+    nest_regex = r"^(?P<ws>[ \t]*)(.+(\r?\n((?P=ws)[ \t]+.*|$))*)"
     tree_list: "list[TaskTree | str] | TaskTree" = []
     for tree in re.finditer(nest_regex, string, flags=re.MULTILINE):
         tree_str = tree.group()
@@ -26,7 +26,7 @@ def from_string(string: "SourceStr | str", L0: int = 0, depth: int = 0):
             continue
 
         # if we're dealing with a source_str we can get the source line directly from it
-        source_map = source_str.source_map(m.string)
+        source_map = source_str.source_map(d['stmt'])
         span = source_map.spans[0]
         start_line, _ = span.file.text_position(span.file_start)
         line = start_line
@@ -42,10 +42,13 @@ def from_string(string: "SourceStr | str", L0: int = 0, depth: int = 0):
 
     return tree_list
 
+def make_common(children: "list[TaskTree|str]"=None):
+    return TaskTree("", "common", 0, children=children)
+
 class TaskTree:
     def __init__(self, name: str, stmt: str, line: int, steps: int = 0, depth: int = 0,
-                 parent: "TaskTree" = None, children: "list[TaskTree]" = None,
-                 body: str = "", traces: "list[str]" = None, asgmt: str = None,
+                 parent: "TaskTree" = None, children: "list[TaskTree|str]" = None,
+                 body: str = "", asgmt: str = None,
                  enable_cells: "dict[str, dict[str, str]]" = None):
         self.name = name
         self.stmt = stmt
@@ -53,15 +56,11 @@ class TaskTree:
         self.steps = steps
         self.depth = depth
         self.parent = parent
-        if children:
-            self.children = children
-        else:
-            self.children = []
+        self.children = []
         self.body = body
-        if traces:
-            self.traces = traces
-        else:
-            self.traces = []
+        if children:
+            self.add_children(children)
+        self.traces = []
         self.asgmt = asgmt
         if enable_cells:
             self.enable_cells = enable_cells
@@ -71,7 +70,10 @@ class TaskTree:
     def add_children(self, children: "list[TaskTree | str]"):
         for child in children:
             if isinstance(child, str):
-                self.body += child
+                if self.body:
+                    self.body = "\n".join([self.body, child])
+                else:
+                    self.body = child
             elif isinstance(child, TaskTree):
                 self.add_child(child)
         return self
@@ -173,7 +175,7 @@ class TaskTree:
             return self.parent.get_dir()
 
     def get_asgmt(self):
-        if self.get_asgmt:
+        if self.asgmt:
             return {"lhs": self.asgmt}
         else:
             return None
@@ -202,15 +204,21 @@ class TaskTree:
             for task in child.traverse():
                 yield task
 
-    def __str__(self):
+    def as_str(self, recurse=False) -> str:
         strings: list[str] = [f"{self.linestr} => {self.stmt} {self.name}"]
         if self.asgmt:
             strings[0] += f" ({self.asgmt})"
         if self.body:
-            strings += self.body.split('\n')[:-1]
-        for child in self.children:
-            strings += str(child).split('\n')
+            for string in self.body.split('\n'):
+                if string:
+                    strings.append(string)
+        if recurse:
+            for child in self.children:
+                strings += child.as_str(recurse).split('\n')
         return "\n ".join(strings)
+
+    def __str__(self):
+        return self.as_str(True)
     
     def __len__(self):
         length = 1
@@ -219,3 +227,4 @@ class TaskTree:
         return length
 
     from_string = staticmethod(from_string)
+    make_common = staticmethod(make_common)

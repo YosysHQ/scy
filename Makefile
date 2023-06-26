@@ -11,6 +11,10 @@ docs-%:
 test: check-scy
 	$(PYTHON) -m pytest -n auto
 
+test-cov: check-scy
+	$(PYTHON) -m pytest -n auto \
+			--cov-report html --cov scy
+
 install:
 	$(PYTHON) -m pip install -e .
 

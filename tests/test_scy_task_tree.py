@@ -60,7 +60,7 @@ def test_mintree_reduce_depth(mintree: TaskTree, amount: int, expected: list):
         ("cover a:\n", "cover", "a", None, ""),
         ("cover b:\n body", "cover", "b", None, " body"),
         ("cover c\n", "cover", "c", None, ""),
-        ("enable cell d e f:\n body\n", "enable", "cell", "d e f", " body"),
+        ("enable cell d e f:\n body\n", "enable", "cell", "d e f", " body\n"),
         ("cover g:\n body\n cover h", "cover", "g", None, " body"),
         ("trace this\n", "trace", "this", None, ""),
         ("trace\n", None, None, None, None),
@@ -189,21 +189,45 @@ def test_update_children_enable_cells_len(enable_tree_with_cell, recurse):
     else:
         assert tree_lens == [1, 1, 2, 1]
 
+@pytest.fixture(params=[
+        {"input_str": dedent("""\
+                                cover a:
+                                    cover b
+                                cover c:
+                                    cover d
+                            """),
+         "len": 2, "trees": 2},
+        {"input_str": "cover a\ncover b\ncover c",
+         "len": 3, "trees": 3},
+        {"input_str": "\ncover a\n cover b",
+         "len": 1, "trees": 1},
+        {"input_str": "cover a:\n cover b\n\ncover c",
+         "len": 2, "trees": 2},
+        {"input_str": "cover a\nempty\ncover b",
+         "len": 3, "trees": 2},
+        {"input_str": "\n\n\n",
+         "len": 0, "trees": 0},
+        {"input_str": "\n \n  \n",
+         "len": 1, "trees": 0}, # this one could (should?) be 0 instead
+])
+def multi_root_input(request):
+    return request.param
+
 @pytest.fixture
-def double_root_covers():
-    return TaskTree.from_string(dedent("""\
-        cover a:
-            cover b
-        cover c:
-            cover d
-    """))
+def multi_root_tree(multi_root_input: "dict[str,str|int]"):
+    return TaskTree.from_string(multi_root_input["input_str"])
 
-def test_double_root_len(double_root_covers: "list[TaskTree|str]"):
-    assert len(double_root_covers) == 2
+def test_multi_root_len(multi_root_input: "dict[str,str|int]", 
+                        multi_root_tree: "list[TaskTree|str]"):
+    expected_len = multi_root_input["len"]
+    actual_len = len(multi_root_tree)
+    assert actual_len == expected_len
 
-def test_double_root_trees(double_root_covers: "list[TaskTree|str]"):
-    for tree in double_root_covers:
-        assert isinstance(tree, TaskTree)
+def test_multi_root_trees(multi_root_input: "dict[str,str|int]", 
+                          multi_root_tree: "list[TaskTree|str]"):
+    expected_trees = multi_root_input["trees"]
+    actual_trees = len([x for x in multi_root_tree if isinstance(x, TaskTree)])
+    assert actual_trees == expected_trees
 
 @pytest.mark.parametrize("input_a,input_b,count", [
     ("cover a:\n\tcover b", "cover c:\n\tcover d", 4),
@@ -237,6 +261,7 @@ def test_add_children(input_a: str, input_b: str, count: int):
     ("cover a:\n disable a","has_local_enable_cells",   True,           False),
     ("cover a",             "tracestr",                 "trace001",     False),
     ("cover a:\n cover b",  "tracestr",                 "trace002",     True),
+    ("cover a:\n append 1", "tracestr",                 "trace001",     True),
     ("cover a:\n\n cover b","tracestr",                 "trace003",     True),
     ("cover a",             "linestr",                  "L001_000",     False),
     ("cover a:\n cover b",  "linestr",                  "L002_001",     True),
@@ -244,6 +269,7 @@ def test_add_children(input_a: str, input_b: str, count: int):
     ("cover a:\n cover b",  "dir",                      "L002_001_b",   True),
     ("cover a",             "children",                  [],            False),
     ("cover a",             "parent",                    None,          False),
+    ("cover a:\n #comment", "body",                      " #comment",   False),
 ])
 def test_statement_properties(input_str, prop, expected, child):
     task_tree = first_tree_from_string(input_str)
@@ -257,6 +283,9 @@ def test_statement_properties(input_str, prop, expected, child):
     ], [
     ("cover a:\n trace b",  "get_dir()",    "L001_000_a",   False),
     ("cover a:\n trace b",  "get_dir()",    "L001_000_a",   True),
+    ("cover a",             "get_asgmt()",  None,           False),
+    ("enable cell d e f:\n body\n",
+                            "get_asgmt()",  {"lhs": "d e f"},False),
 ])
 def test_statement_callable(input_str, func, expected, child):
     task_tree = first_tree_from_string(input_str)
@@ -264,3 +293,73 @@ def test_statement_callable(input_str, func, expected, child):
         task_tree = task_tree.children[0]
     actual = eval(f"task_tree.{func}")
     assert actual == expected
+
+@pytest.mark.parametrize([
+     "func_or_prop",    "expected"
+    ], [
+    ("tracestr",        "common"),
+    ("dir",             "common"),
+    ("get_dir()",       "common"),
+    ("as_str()",       "L000_000 => common "), # Should this be like this?
+    ("uses_sby",        True),
+    ("is_common",       True),
+])
+def test_common_tree(func_or_prop: str, expected):
+    common_tree = TaskTree.make_common()
+    if func_or_prop.endswith(")"):
+        # function call
+        actual = eval(f"common_tree.{func_or_prop}")
+    else:
+        # property
+        actual = getattr(common_tree, func_or_prop)
+    assert actual == expected
+
+@pytest.fixture(params=[
+    {"input_str": "cover a",
+     "tree_lines": [1], 
+     "print_lines": (1, 1)},
+    {"input_str": "\ncover a",
+     "tree_lines": [2], 
+     "print_lines": (1, 1)},
+    {"input_str": "cover a:\n cover b",
+     "tree_lines": [1, 2], 
+     "print_lines": (1, 2)},
+    {"input_str": "cover a:\n\n cover b",
+     "tree_lines": [1, 3], 
+     "print_lines": (1, 2)},
+    {"input_str": "cover a:\n \n cover b",
+     "tree_lines": [1, 3], 
+     "print_lines": (1, 2)},
+    {"input_str": "cover a:\n text\n cover b",
+     "tree_lines": [1, 3], 
+     "print_lines": (2, 3)},
+    {"input_str": "cover a:\n #comment\n cover b",
+     "tree_lines": [1, 3], 
+     "print_lines": (2, 3)},
+    {"input_str": "cover a:\n #comment1\n #comment2\n cover b",
+     "tree_lines": [1, 4], 
+     "print_lines": (3, 4)},
+    {"input_str": "enable cell d e f:\n body\n",
+     "tree_lines": [1],
+     "print_lines": (2, 2)}
+])
+def line_counts_input(request):
+    return request.param
+
+@pytest.fixture
+def line_counts_tree(line_counts_input):
+    return first_tree_from_string(line_counts_input["input_str"])
+
+def test_tree_lines(line_counts_input: "dict[str, list[int]]", line_counts_tree: TaskTree):
+    expected = line_counts_input["tree_lines"]
+    actual = get_tree_list(lambda x: x.line, line_counts_tree)
+    assert actual == expected
+
+@pytest.mark.parametrize("recurse", [True, False])
+def test_tree_print_lines(recurse: bool, line_counts_input: "dict[str, tuple[int,int]]", line_counts_tree: TaskTree):
+    expected = line_counts_input["print_lines"][1 if recurse else 0]
+    actual = line_counts_tree.as_str(recurse)
+    print(line_counts_tree.body)
+    assert len(actual.splitlines()) == expected
+
+#TODO: get_all_linestr(), start_cycle and stop_cycle
