@@ -203,10 +203,10 @@ class TestComplexClass:
                                 "error": "nothing to trace"},
         {"name": "trace_child", "sequence": ["trace now:", " cover cp_4:"],
                                 "data": ["4"],
-                                "error": "trace statement has children"},
+                                "error": "trace statement does not support children"},
         {"name":  "bad_parent", "sequence": ["cover cp_1:", " cover cp_2"],
                                 "data": [],
-                                "error": "sby failed to generate",},
+                                "error": "sby produced an error",},
         {"name":     "bad_seq", "sequence": ["123", "abc"],
                                 "cover_stmts": ["", "//blank"],
                                 "error": "bad sequence"},
@@ -214,11 +214,15 @@ class TestComplexClass:
                                 "cover_stmts": ["", "//blank"],
                                 "error": "no cover sequences"},
         {"name":  "fail_depth", "data": ["1", " 2", "  3", "  44"],
-                                "error": "sby failed to generate"},
+                                "error": "sby produced an error"},
         {"name":   "fail_data", "data": [], "error": "no cover sequences"},
         {"name":     "bad_dir", "data": ["1"],
                                 "args": ["-d", "this_dir"], "mkdir": "this_dir",
                                 "error": "use -f to overwrite the existing directory"},
+        {"name":   "no_covers", "sequence": ["cover cp_1:", ""],
+                                "data": [],
+                                "error": "task produced no trace",
+                                "code": 1},
 ], scope="class")
 class TestErrorsClass:
     def test_runs(self, test: "dict[str, str | list]", scy_exec: subprocess.CompletedProcess):
@@ -239,27 +243,6 @@ class TestErrorsClass:
                 break
 
         assert found_exception, f"{test['error']} not found in {exceptions}"
-
-@pytest.mark.parametrize("test", [
-        {"name":   "no_covers", "sequence": ["cover cp_1:", ""],
-                                "data": [],
-                                "error": "No trace",
-                                "code": 1},
-], scope="class")
-class TestHandledErrorsClass:
-    def test_runs(self, test: "dict[str, str | list]", scy_exec: subprocess.CompletedProcess):
-        if "code" in test:
-            assert scy_exec.returncode == test["code"]
-        else:
-            with pytest.raises(subprocess.CalledProcessError):
-                scy_exec.check_returncode()
-
-        try:
-            last_out = bytes.decode(scy_exec.stdout).splitlines().pop()
-        except IndexError:
-            last_out = ""
-
-        assert test["error"] in last_out
 
 @pytest.mark.parametrize("test", [
         {"name": "baseline", "data": ["1", " 2", "  3"],

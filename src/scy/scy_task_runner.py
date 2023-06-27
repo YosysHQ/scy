@@ -11,6 +11,10 @@ from scy.scy_sby_bridge import (
     parse_common_sby,
     SBYBridge,
 )
+from scy.scy_exceptions import (
+    SCYTreeException,
+    SCYSubProcessException
+)
 
 import yosys_mau.task_loop as tl
 
@@ -47,14 +51,11 @@ def gen_traces(task: TaskTree) -> "list[str]":
 
 def on_sby_exit(event: tl.process.ExitEvent):
     if event.returncode != 0:
-        if isinstance(event.source, tl.ProcessTask):
-            event_task = cast(tl.ProcessTask, event.source)
-            event_sby = Path(event_task.command[-1])
-            event_dir = Path(event_task.cwd)
-            error_str = f"{event_sby} failed to generate, see {event_dir / event_sby.stem / 'logfile.txt'} for more info"
-        else:
-            error_str = "sby returned an error"
-        raise RuntimeError(error_str)
+        event_task = cast(tl.Process, event.source)
+        event_sby = Path(event_task.command[-1])
+        event_dir = Path(event_task.cwd)
+        err = SCYSubProcessException(target=event_sby, logfile=event_dir / event_sby.stem / 'logfile.txt')
+        tl.log_exception(err)
 
 class SingleTreeTask(tl.Task):
     def __init__(self, task_runner: "TaskRunner", task: TaskTree, recurse: bool):
@@ -109,14 +110,14 @@ class TaskRunner():
         (add_log, self.add_cells, self.enable_cells) = parse_common_sby(common_task, self.sbycfg, self.scycfg)
 
         # use sby to prepare input
-        print(f"Preparing input files")
+        print(f"preparing input files")
         task_sby = workdir / "common.sby"
 
         with open(task_sby, 'w') as sbyfile:
             self.sbycfg.dump_common(sbyfile)
 
         sby_args = ["sby", "common.sby"]
-        root_task = tl.ProcessTask(sby_args, workdir)
+        root_task = tl.Process(sby_args, cwd=workdir)
         root_task.events(tl.process.ExitEvent).handle(on_sby_exit)
 
         if self.scycfg.options.replay_vcd and not self.scycfg.options.design_scope:
@@ -175,22 +176,23 @@ class TaskRunner():
             taskcfg = gen_sby(task, self.sbycfg, self.scycfg,
                               self.add_cells, self.enable_cells)
             task_sby = workdir / f"{task.dir}.sby"
-            print(f"Generating {task_sby}")
+            print(f"generating {task_sby}")
             with open(task_sby, 'w') as sbyfile:
                 taskcfg.dump(sbyfile)
             task_trace = f"{task.tracestr}.{self.scycfg.options.trace_ext}"
             if not setupmode:
                 # run sby
                 sby_args = ["sby", "-f", f"{task.dir}.sby"]
-                root_task = tl.ProcessTask(sby_args, workdir)
+                root_task = tl.Process(sby_args, cwd=workdir)
                 root_task.events(tl.process.ExitEvent).handle(on_sby_exit)
                 root_task.events(tl.process.OutputEvent).process(self.handle_cover_output)
         elif task.stmt == "trace":
             if self.scycfg.options.replay_vcd:
-                raise NotImplementedError(f"replay_vcd option with trace statement on line {task.line}")
+                raise SCYTreeException(task.stmt, "replay_vcd option incompatible with trace statement")
             if not task.is_leaf:
-                raise NotImplementedError(f"trace statement has children on line {task.line}")
-            assert not task.is_root and not task.parent.is_common, f"trace statement on line {task.line} has nothing to trace"
+                raise SCYTreeException(task.children[0].stmt, "trace statement does not support children")
+            if task.is_root or task.parent.is_common:
+                raise SCYTreeException(task.full_line, "trace statement has nothing to trace")
 
             if not setupmode:
                 # prepare yosys
@@ -203,17 +205,17 @@ class TaskRunner():
 
                 # now use yosys to replay trace and generate vcd
                 yw_args.append(f"{task.name}.yw")
-                yw_proc = tl.ProcessTask(yw_args, workdir)
+                yw_proc = tl.Process(yw_args, cwd=workdir)
                 common_il = self.sbycfg.files[0].split()[-1]
                 yosys_args = [
                     "yosys", "-p", 
                     f"read_rtlil {common_il}; sim -hdlname -r {task.name}.yw -vcd {task.name}.vcd"
                 ]
-                yosys_proc = tl.ProcessTask(yosys_args, workdir)
+                yosys_proc = tl.Process(yosys_args, cwd=workdir)
                 yosys_proc.depends_on(yw_proc)
         elif task.stmt == "append":
             if self.scycfg.options.replay_vcd:
-                raise NotImplementedError(f"replay_vcd option with append statement on line {task.line}")
+                raise SCYTreeException(task.stmt, "replay_vcd option incompatible with append statement")
             task.traces[-1] += f" -append {int(task.name):d}"
             self.task_steps[f"{task.linestr}_{task.name}"] = int(task.name)
         elif task.stmt == "add":
@@ -226,7 +228,8 @@ class TaskRunner():
             task_cell["line"] = task.line
             task.add_or_update_enable_cell(task.name, task_cell)
         else:
-            raise NotImplementedError(f"unknown stament {task.stmt!r} on line {task.line}")
+            # this shouldn't happen since an unrecognised statement should have been caught by the tree parse
+            raise SCYTreeException(task.full_line, "unrecognised statement")
 
         # add traces to children
         task.update_children_traces(task_trace)

@@ -33,7 +33,7 @@ def from_string(string: "SourceStr | str", L0: int = 0, depth: int = 0):
 
         # otherwise continue recursively
         root = TaskTree(name=d['name'], stmt=d['stmt'], line=line, depth=depth,
-                        asgmt=d.get('asgmt', None))
+                        asgmt=d.get('asgmt', None), full_line=tree_str.splitlines()[0])
 
         if d['body']:
             root.add_children(from_string(d['body']))
@@ -48,7 +48,7 @@ def make_common(children: "list[TaskTree|str]"=None):
 class TaskTree:
     def __init__(self, name: str, stmt: str, line: int, steps: int = 0, depth: int = 0,
                  parent: "TaskTree" = None, children: "list[TaskTree|str]" = None,
-                 body: str = "", asgmt: str = None,
+                 body: str = "", asgmt: str = None, full_line: SourceStr = None,
                  enable_cells: "dict[str, dict[str, str]]" = None):
         self.name = name
         self.stmt = stmt
@@ -56,7 +56,7 @@ class TaskTree:
         self.steps = steps
         self.depth = depth
         self.parent = parent
-        self.children = []
+        self.children: "list[TaskTree|str]" = []
         self.body = body
         if children:
             self.add_children(children)
@@ -66,6 +66,10 @@ class TaskTree:
             self.enable_cells = enable_cells
         else:
             self.enable_cells = {}
+        if full_line:
+            self.full_line = full_line
+        else:
+            full_line = self.stmt
 
     def add_children(self, children: "list[TaskTree | str]"):
         for child in children:

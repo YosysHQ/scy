@@ -17,7 +17,7 @@ def scy_exec(scy_dir, scy_args) -> subprocess.CompletedProcess:
 @pytest.fixture(scope="class")
 def scy_chunks(scy_exec: subprocess.CompletedProcess):
     scy_out = str(scy_exec.stdout, encoding="utf-8")
-    regex = r"\nChunks:\n(.*)"
+    regex = r"Chunks:\n(.*)"
     match = re.search(regex, scy_out, re.DOTALL)
     try:
         chunk_str = match.group()

@@ -8,9 +8,20 @@ from scy.scy_config_parser import SCYConfig
 from scy.scy_sby_bridge import SBYBridge
 from scy.scy_task_runner import TaskRunner
 from scy.scy_task_tree import TaskTree
+from scy.scy_exceptions import (
+    SCYMissingTraceException,
+)
 from yosys_mau import source_str
 import yosys_mau.task_loop as tl
+from yosys_mau.task_loop import (
+    LogContext,
+    log,
+    log_exception,
+    logging
+)
 import yosys_mau.task_loop.job_server as job
+
+LogContext.app_name = "SCY"
 
 def parser_func():
     parser = argparse.ArgumentParser(prog="scy")
@@ -22,6 +33,8 @@ def parser_func():
     parser.add_argument("-f", action="store_true", dest="force",
             help="remove workdir if it already exists")
 
+    parser.add_argument("-E", action="store_true", dest="throw_err",
+            help="throw an exception (incl stack trace) for most errors")
     parser.add_argument("-j", metavar="<N>", type=int, dest="jobcount",
             help="maximum number of processes to run in parallel")
 
@@ -83,34 +96,35 @@ class SCYTask():
 
     def display_stats(self):
         trace_tasks: "list[TaskTree]" = []
-        print("Chunks:")
+        log("Chunks:")
         for task in self.scycfg.root.traverse():
             if task.stmt == "trace":
                 trace_tasks.append(task)
             if task.stmt not in ["append", "cover"]:
                 continue
-            try:
-                task.steps = self.task_runner.task_steps[f"{task.linestr}_{task.name}"]
-            except KeyError:
-                print(f"No trace for {task.name} on line {task.line}, exiting.")
-                sys.exit(1)
+            task.steps = self.task_runner.task_steps.get(f"{task.linestr}_{task.name}")
+            if not task.steps:
+                raise SCYMissingTraceException(task.full_line, "task produced no trace")
             chunk_str = " "*task.depth + f"L{task.line}"
             cycles_str = f"{task.start_cycle:2} .. {task.stop_cycle:2}"
             task_str = task.name if task.is_runnable else f"{task.stmt} {task.name}"
-            print(f"  {chunk_str:6}  {cycles_str}  =>  {task.steps:2}  {task_str}")
+            log(f"  {chunk_str:6}  {cycles_str}  =>  {task.steps:2}  {task_str}")
 
         if trace_tasks:
-            print("\nTraces:")
+            log("Traces:")
         for task in trace_tasks:
             cycles_str = f"{task.stop_cycle + 1:>2} cycles"
             chunks = task.parent.get_all_linestr()
             chunks.sort()
             chunks_str = " ".join(chunks)
-            print(f"  {task.name:12} {cycles_str} [{chunks_str}]")
+            log(f"  {task.name:12} {cycles_str} [{chunks_str}]")
 
     def run(self):
         if self.args.workdir is None:
             self.args.workdir = self.args.scyfile.split('.')[0]
+
+        # setup logging
+        logging.start_logging()
 
         # parse scy file
         parse_task = tl.Task(self.parse_scyfile)
@@ -119,6 +133,7 @@ class SCYTask():
         if self.args.dump_tree:
             display_task = tl.Task(on_run=self.display_tree)
             display_task.depends_on(parse_task)
+            display_task[LogContext].scope = "tasks"
             return
 
         # generate workdir
@@ -144,18 +159,26 @@ class SCYTask():
         # output stats
         display_task = tl.Task(on_run=self.display_stats)
         display_task.depends_on(exec_task)
+        display_task[LogContext].scope = "stats"
 
 def main():
     # read args
     parser = parser_func()
     args=parser.parse_args()
-    client = job.global_client(args.jobcount)
-    print(f"Using {client._job_count} job slots")
+
+    # setup
+    job.global_client(args.jobcount)
 
     # run SCY
     scy_task = SCYTask(args)
-    tl.run_task_loop(scy_task.run)
-    sys.exit(0)
+    try:
+        tl.run_task_loop(scy_task.run)
+    except BaseException as e:
+        import traceback
+
+        traceback.print_exc()
+        log_exception(e, raise_error=False)
+        exit(1)
 
 if __name__ == "__main__":
     main()
