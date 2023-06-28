@@ -17,6 +17,11 @@ from scy.scy_exceptions import (
 )
 
 import yosys_mau.task_loop as tl
+from yosys_mau.task_loop import (
+    LogContext,
+    log,
+    log_exception,
+)
 
 def gen_traces(task: TaskTree) -> "list[str]":
     # reversing trace order means that the most recent trace will be first
@@ -97,6 +102,7 @@ def load_design():
 
 def run_tree():
     # loading context
+    LogContext.scope = "common"
     sbycfg = SCYRunnerContext.sbycfg
     scycfg = SCYRunnerContext.scycfg
     common_task = scycfg.root
@@ -104,7 +110,7 @@ def run_tree():
     (add_log, add_cells, enable_cells) = parse_common_sby(common_task, sbycfg, scycfg)
 
     # use sby to prepare input
-    print(f"preparing input files")
+    log(f"preparing input files")
     task_sby = workdir / "common.sby"
 
     with open(task_sby, 'w') as sbyfile:
@@ -167,6 +173,7 @@ def run_task():
     task = SCYTestContext.task
     workdir = Path(SCYRunnerContext.scycfg.args.workdir)
     setupmode = SCYRunnerContext.scycfg.args.setupmode
+    LogContext.scope = task.full_line.strip(" \t:")
 
     # default values
     task_trace = None
@@ -177,7 +184,7 @@ def run_task():
         taskcfg = gen_sby(task, SCYRunnerContext.sbycfg, SCYRunnerContext.scycfg,
                             SCYRunnerContext.add_cells, SCYRunnerContext.enable_cells)
         task_sby = workdir / f"{task.dir}.sby"
-        print(f"generating {task_sby}")
+        log(f"generating {task_sby}")
         with open(task_sby, 'w') as sbyfile:
             taskcfg.dump(sbyfile)
         task_trace = f"{task.tracestr}.{SCYRunnerContext.scycfg.options.trace_ext}"
@@ -189,11 +196,11 @@ def run_task():
             root_task.events(tl.process.OutputEvent).process(handle_cover_output)
     elif task.stmt == "trace":
         if SCYRunnerContext.scycfg.options.replay_vcd:
-            raise SCYTreeException(task.stmt, "replay_vcd option incompatible with trace statement")
+            log_exception(SCYTreeException(task.stmt, "replay_vcd option incompatible with trace statement"))
         if not task.is_leaf:
-            raise SCYTreeException(task.children[0].stmt, "trace statement does not support children")
+            log_exception(SCYTreeException(task.children[0].stmt, "trace statement does not support children"))
         if task.is_root or task.parent.is_common:
-            raise SCYTreeException(task.full_line, "trace statement has nothing to trace")
+            log_exception(SCYTreeException(task.full_line, "trace statement has nothing to trace"))
 
         if not setupmode:
             # prepare yosys
@@ -216,7 +223,7 @@ def run_task():
             yosys_proc.depends_on(yw_proc)
     elif task.stmt == "append":
         if SCYRunnerContext.scycfg.options.replay_vcd:
-            raise SCYTreeException(task.stmt, "replay_vcd option incompatible with append statement")
+            log_exception(SCYTreeException(task.stmt, "replay_vcd option incompatible with append statement"))
         task.traces[-1] += f" -append {int(task.name):d}"
         SCYRunnerContext.task_steps[f"{task.linestr}_{task.name}"] = int(task.name)
     elif task.stmt == "add":
@@ -230,7 +237,7 @@ def run_task():
         task.add_or_update_enable_cell(task.name, task_cell)
     else:
         # this shouldn't happen since an unrecognised statement should have been caught by the tree parse
-        raise SCYTreeException(task.full_line, "unrecognised statement")
+        log_exception(SCYTreeException(task.full_line, "unrecognised statement"))
 
     # add traces to children
     task.update_children_traces(task_trace)

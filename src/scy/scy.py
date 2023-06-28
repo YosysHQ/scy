@@ -165,9 +165,9 @@ def main():
     try:
         tl.run_task_loop(scy_task.run)
     except BaseException as e:
-        import traceback
-
-        traceback.print_exc()
+        if args.throw_err:
+            import traceback
+            traceback.print_exc()
         log_exception(e, raise_error=False)
         exit(1)
 

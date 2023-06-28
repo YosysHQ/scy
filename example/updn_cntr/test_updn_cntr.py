@@ -116,7 +116,10 @@ def scy_cfg(scy_dir: Path, base_cfg: "dict[str, list[str]]", sequence, cover_stm
 
 @pytest.fixture(scope="class")
 def cmd_args(test: "dict[str, list[str]]"):
-    return test.get("args", [])
+    args = test.get("args", [])
+    if "error" in test:
+        args.append("-E")
+    return args
 
 @pytest.mark.parametrize("test", [
         {"name": "pass", "data": ["1", " 2", "  3"],
