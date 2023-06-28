@@ -10,6 +10,38 @@ import pytest
 from scy.scy_task_tree import TaskTree
 import yosys_mau.task_loop as tl
 
+class TaskRunner():
+    def __init__(self, sbycfg: SBYBridge, scycfg: SCYConfig):
+        self.sbycfg = sbycfg
+        self.scycfg = scycfg
+        self.add_cells: "dict[int, dict[str]]" = {}
+        self.enable_cells: "dict[str, dict[str, str | bool]]" = {}
+        self.task_steps: "dict[str, int]" = {}
+
+    def _prep_loop(self, recurse: bool):
+        scytr.SCYTestContext.recurse = recurse
+        scytr.SCYRunnerContext.sbycfg = self.sbycfg
+        scytr.SCYRunnerContext.scycfg = self.scycfg
+        scytr.SCYRunnerContext.add_cells = self.add_cells
+        scytr.SCYRunnerContext.enable_cells = self.enable_cells
+        scytr.SCYRunnerContext.task_steps = self.task_steps
+
+    def _run_tree_loop(self):
+        tl.run_task_loop(self._run_tree)
+
+    def _run_tree(self):
+        scytr.SCYRunnerContext.sbycfg = self.sbycfg
+        scytr.SCYRunnerContext.scycfg = self.scycfg
+        scytr.SCYRunnerContext.task_steps = self.task_steps
+        scytr.run_tree()
+
+    def _run_task_loop(self, task: TaskTree, recurse=True):
+        tl.run_task_loop(lambda:self._run_children([task], recurse))
+
+    def _run_children(self, children: "list[TaskTree]", recurse: bool):
+        self._prep_loop(recurse)
+        scytr.run_children(children, None)
+
 @pytest.fixture(params=["setup", "run", "replay_vcd"])
 def scycfg_upcnt(tmp_path, request: pytest.FixtureRequest):
     contents = dedent("""
@@ -75,21 +107,21 @@ def sbycfg_upcnt(scycfg_upcnt):
 
 @pytest.fixture
 def scytr_upcnt(sbycfg_upcnt: SBYBridge, scycfg_upcnt: SCYConfig):
-    return scytr.TaskRunner(sbycfg_upcnt, scycfg_upcnt)
+    return TaskRunner(sbycfg_upcnt, scycfg_upcnt)
 
 @pytest.fixture
-def scytr_upcnt_with_common(scytr_upcnt: scytr.TaskRunner):
+def scytr_upcnt_with_common(scytr_upcnt: TaskRunner):
     scycfg = scytr_upcnt.scycfg
     scycfg.root = TaskTree("", "common", 0)
     scycfg.root.add_children(scycfg.sequence)
     return scytr_upcnt
 
 @pytest.fixture
-def run_tree(scytr_upcnt_with_common: scytr.TaskRunner):
+def run_tree(scytr_upcnt_with_common: TaskRunner):
     scytr_upcnt_with_common._run_tree_loop()
 
 @pytest.mark.usefixtures("run_tree")
-def test_tree_makes_sby(scytr_upcnt: scytr.TaskRunner):
+def test_tree_makes_sby(scytr_upcnt: TaskRunner):
     scycfg = scytr_upcnt.scycfg
     root = scycfg.root
     sby_files = [f.name for f in pathlib.Path(scycfg.args.workdir).glob("*.sby")]
@@ -99,7 +131,7 @@ def test_tree_makes_sby(scytr_upcnt: scytr.TaskRunner):
     assert not sby_files
 
 @pytest.mark.usefixtures("run_tree")
-def test_tree_respects_setup(scytr_upcnt: scytr.TaskRunner):
+def test_tree_respects_setup(scytr_upcnt: TaskRunner):
     scycfg = scytr_upcnt.scycfg
     root = scycfg.root
     sby_dirs = [f.name for f in pathlib.Path(scycfg.args.workdir).iterdir() if f.is_dir()]
@@ -113,13 +145,13 @@ def test_tree_respects_setup(scytr_upcnt: scytr.TaskRunner):
                 sby_dirs.remove(task.dir)
     assert not sby_dirs
 
-def test_run_task(scytr_upcnt: scytr.TaskRunner):
+def test_run_task(scytr_upcnt: TaskRunner):
     scytr_upcnt.sbycfg.options.append("mode cover")
     root_task = scytr_upcnt.scycfg.sequence[0]
     scytr_upcnt._run_task_loop(root_task, recurse=False)
     assert True
 
-def test_run_task_nomode(scytr_upcnt: scytr.TaskRunner):
+def test_run_task_nomode(scytr_upcnt: TaskRunner):
     try:
         scytr_upcnt.sbycfg.options.remove("mode cover")
     except ValueError:

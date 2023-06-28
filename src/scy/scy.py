@@ -6,7 +6,10 @@ import shutil
 import sys
 from scy.scy_config_parser import SCYConfig
 from scy.scy_sby_bridge import SBYBridge
-from scy.scy_task_runner import TaskRunner
+from scy.scy_task_runner import (
+    SCYRunnerContext,
+    run_tree
+)
 from scy.scy_task_tree import TaskTree
 from scy.scy_exceptions import (
     SCYMissingTraceException,
@@ -50,24 +53,18 @@ def parser_func():
     return parser
 
 class SCYTask():
-    def __init__(self, 
-                 args: "argparse.Namespace | None" = None,
-                 scycfg: "SCYConfig | None" = None,
-                 sbycfg: "SBYBridge | None" = None,
-                 task_runner: "TaskRunner | None" = None,
-                 ):
+    def __init__(self, args: "argparse.Namespace | None" = None):
         self.args = args
-        self.scycfg = scycfg
-        self.sbycfg = sbycfg
-        self.task_runner = task_runner
 
     def parse_scyfile(self):
         scy_source = source_str.read_file(self.args.scyfile)
-        self.scycfg = SCYConfig(scy_source)
-        self.scycfg.args = self.args
+        scycfg = SCYConfig(scy_source)
+        scycfg.args = self.args
+        with tl.root_task().as_current_task():
+            SCYRunnerContext.scycfg = scycfg
 
     def display_tree(self):
-        for seq in self.scycfg.sequence:
+        for seq in SCYRunnerContext.scycfg.sequence:
             if isinstance(seq, TaskTree):
                 print(seq)
 
@@ -82,29 +79,27 @@ class SCYTask():
                 raise RuntimeError(f"directory '{self.args.workdir}' already exists, use -f to overwrite the existing directory.",)
 
     def prep_sby(self):
-        self.sbycfg = SBYBridge.from_scycfg(self.scycfg)
-        self.sbycfg.fix_relative_paths("..")
+        sbycfg = SBYBridge.from_scycfg(SCYRunnerContext.scycfg)
+        sbycfg.fix_relative_paths("..")
+        with tl.root_task().as_current_task():
+            SCYRunnerContext.sbycfg = sbycfg
+            SCYRunnerContext.task_steps = {}
 
         # add common sby generation task
-        self.scycfg.root = TaskTree.make_common(children=self.scycfg.sequence)
-
-    def make_runner(self):
-        self.task_runner = TaskRunner(self.sbycfg, self.scycfg)
-
-    def run_tree(self):
-        self.task_runner.run_tree()
+        SCYRunnerContext.scycfg.root = TaskTree.make_common(children=SCYRunnerContext.scycfg.sequence)
 
     def display_stats(self):
         trace_tasks: "list[TaskTree]" = []
         log("Chunks:")
-        for task in self.scycfg.root.traverse():
+        for task in SCYRunnerContext.scycfg.root.traverse():
             if task.stmt == "trace":
                 trace_tasks.append(task)
             if task.stmt not in ["append", "cover"]:
                 continue
-            task.steps = self.task_runner.task_steps.get(f"{task.linestr}_{task.name}")
+            task.steps = SCYRunnerContext.task_steps.get(f"{task.linestr}_{task.name}")
             if not task.steps:
-                raise SCYMissingTraceException(task.full_line, "task produced no trace")
+                err = SCYMissingTraceException(task.full_line, "task produced no trace")
+                log_exception(err)
             chunk_str = " "*task.depth + f"L{task.line}"
             cycles_str = f"{task.start_cycle:2} .. {task.stop_cycle:2}"
             task_str = task.name if task.is_runnable else f"{task.stmt} {task.name}"
@@ -144,13 +139,9 @@ class SCYTask():
         prep_task.depends_on(parse_task)
 
         # prepare task tree
-        tree_task = tl.Task(on_run=self.make_runner)
+        tree_task = tl.Task(on_run=run_tree)
         tree_task.depends_on(prep_task)
-
-        # execute task tree        
-        exec_task = tl.Task(on_run=self.run_tree)
-        exec_task.depends_on(tree_task)
-        exec_task.depends_on(dir_task)
+        tree_task.depends_on(dir_task)
 
         # setupmode skip
         if self.args.setupmode:
@@ -158,7 +149,7 @@ class SCYTask():
 
         # output stats
         display_task = tl.Task(on_run=self.display_stats)
-        display_task.depends_on(exec_task)
+        display_task.depends_on(tree_task)
         display_task[LogContext].scope = "stats"
 
 def main():
