@@ -32,7 +32,7 @@ class SBYBridge():
 
     @property
     def options(self) -> "list[str]":
-        return self.data["options"]
+        return self.data.get("options")
 
     @options.setter
     def options(self, contents: "str | list[str]"):
@@ -40,7 +40,7 @@ class SBYBridge():
 
     @property
     def script(self) -> "list[str]":
-        return self.data["script"]
+        return self.data.get("script")
 
     @script.setter
     def script(self, contents: "str | list[str]"):
@@ -48,7 +48,7 @@ class SBYBridge():
 
     @property
     def files(self) -> "list[str]":
-        return self.data["files"]
+        return self.data.get("files")
 
     @files.setter
     def files(self, contents: "str | list[str]"):
@@ -84,7 +84,7 @@ class SBYBridge():
                           "skip_prep on"]
         try:
             self.options.extend(shared_options)
-        except KeyError:
+        except AttributeError:
             self.options = shared_options
         self.script = ["read_rtlil common_design.il"]
         self.files = [f"common_design.il {common_il}"]

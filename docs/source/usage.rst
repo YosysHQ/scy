@@ -2,6 +2,6 @@ Using `scy`
 ===========
 
 .. argparse::
-    :module: scy.scy
-    :func: parser_func
+    :module: scy.scy_config_parser
+    :func: SCY_arg_parser
     :prog: scy

@@ -69,7 +69,7 @@ class TaskTree:
         if full_line:
             self.full_line = full_line
         else:
-            full_line = self.stmt
+            self.full_line = self.stmt
 
     def add_children(self, children: "list[TaskTree | str]"):
         for child in children:

@@ -35,8 +35,7 @@ def test_bridge_init_named(key: str, init_data: "dict[str]", sbybridge: SBYBridg
     if key in init_data.keys():
         assert init_data[key] == getattr(sbybridge, key)
     else:
-        with pytest.raises(KeyError):
-            getattr(sbybridge, key)
+        assert not getattr(sbybridge, key)
 
 def test_bridge_prep_shared(init_data: "dict[str]", sbybridge: SBYBridge):
     sbybridge.prep_shared("common.il")

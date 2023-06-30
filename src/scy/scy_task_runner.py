@@ -12,8 +12,11 @@ from scy.scy_sby_bridge import (
     SBYBridge,
 )
 from scy.scy_exceptions import (
-    SCYTreeException,
-    SCYSubProcessException
+    SCYSubProcessException,
+    SCYTreeError,
+    SCYUnknownCellError,
+    SCYUnknownStatementError,
+    SCYValueError
 )
 
 import yosys_mau.task_loop as tl
@@ -71,7 +74,7 @@ class SCYRunnerContext:
     task_steps: "dict[str, int]"
 
 @tl.task_context
-class SCYTestContext:
+class SCYTaskContext:
     task: TaskTree
     recurse: bool
 
@@ -86,7 +89,7 @@ async def handle_cover_output(lines):
 def run_children(children: "list[TaskTree]", blocker: "tl.Task"):
     for child in children:
         child_task = tl.Task(on_run=run_task)
-        child_task[SCYTestContext].task = child
+        child_task[SCYTaskContext].task = child
         if blocker:
             child_task.depends_on(blocker)
 
@@ -107,7 +110,10 @@ def run_tree():
     scycfg = SCYRunnerContext.scycfg
     common_task = scycfg.root
     workdir = Path(SCYRunnerContext.scycfg.args.workdir)
-    (add_log, add_cells, enable_cells) = parse_common_sby(common_task, sbycfg, scycfg)
+    try:
+        (add_log, add_cells, enable_cells) = parse_common_sby(common_task, sbycfg, scycfg)
+    except NotImplementedError as e:
+        log_exception(e)
 
     # use sby to prepare input
     log(f"preparing input files")
@@ -165,12 +171,12 @@ def run_tree():
 
     SCYRunnerContext.add_cells = add_cells
     SCYRunnerContext.enable_cells = enable_cells
-    SCYTestContext.recurse = True
+    SCYTaskContext.recurse = True
     run_children(common_task.children, root_task)
 
 def run_task():
     # loading context
-    task = SCYTestContext.task
+    task = SCYTaskContext.task
     workdir = Path(SCYRunnerContext.scycfg.args.workdir)
     setupmode = SCYRunnerContext.scycfg.args.setupmode
     LogContext.scope = task.full_line.strip(" \t:")
@@ -196,11 +202,13 @@ def run_task():
             root_task.events(tl.process.OutputEvent).process(handle_cover_output)
     elif task.stmt == "trace":
         if SCYRunnerContext.scycfg.options.replay_vcd:
-            log_exception(SCYTreeException(task.stmt, "replay_vcd option incompatible with trace statement"))
+            log_exception(SCYTreeError(task.stmt, "replay_vcd option incompatible with trace statement"))
         if not task.is_leaf:
-            log_exception(SCYTreeException(task.children[0].stmt, "trace statement does not support children"))
+            log_exception(SCYTreeError(task.children[0].stmt, "trace statement does not support children"))
         if task.is_root or task.parent.is_common:
-            log_exception(SCYTreeException(task.full_line, "trace statement has nothing to trace"))
+            log_exception(SCYTreeError(task.full_line, "trace statement cannot be root task"))
+        if not SCYRunnerContext.sbycfg.files:
+            log_exception(SCYTreeError(task.full_line, "trace requires common sby generation"))
 
         if not setupmode:
             # prepare yosys
@@ -223,25 +231,38 @@ def run_task():
             yosys_proc.depends_on(yw_proc)
     elif task.stmt == "append":
         if SCYRunnerContext.scycfg.options.replay_vcd:
-            log_exception(SCYTreeException(task.stmt, "replay_vcd option incompatible with append statement"))
-        task.traces[-1] += f" -append {int(task.name):d}"
+            log_exception(SCYTreeError(task.stmt, "replay_vcd option incompatible with append statement"))
+        if task.is_root or task.parent.is_common:
+            log_exception(SCYTreeError(task.full_line, "append statement cannot be root task"))
+        try:
+            task.traces[-1] += f" -append {int(task.name):d}"
+        except IndexError:
+            log_exception(SCYTreeError(task.full_line, f"append expected parent task to produce a trace"))
+        except ValueError:
+            log_exception(SCYValueError(task.name, "must be integer literal"))
         SCYRunnerContext.task_steps[f"{task.linestr}_{task.name}"] = int(task.name)
     elif task.stmt == "add":
-        add_cell = SCYRunnerContext.add_cells[task.line]
+        try:
+            add_cell = SCYRunnerContext.add_cells[task.line]
+        except KeyError:
+            log_exception(SCYUnknownCellError(task.full_line, f"attempted to add unknown cell"))
         task.add_enable_cell(add_cell["cell"], add_cell)
         task.reduce_depth()
     elif task.stmt in ["enable", "disable"]:
-        task_cell = SCYRunnerContext.enable_cells[task.name].copy()
+        try:
+            task_cell = SCYRunnerContext.enable_cells[task.name].copy()
+        except KeyError:
+            log_exception(SCYUnknownCellError(task.full_line, f"attempted to {task.stmt} unknown cell"))
         task_cell["status"] = task.stmt
         task_cell["line"] = task.line
         task.add_or_update_enable_cell(task.name, task_cell)
     else:
         # this shouldn't happen since an unrecognised statement should have been caught by the tree parse
-        log_exception(SCYTreeException(task.full_line, "unrecognised statement"))
+        log_exception(SCYUnknownStatementError(task.full_line, "unrecognised statement"))
 
     # add traces to children
     task.update_children_traces(task_trace)
     task.update_children_enable_cells(recurse=False)            
 
-    if SCYTestContext.recurse:
+    if SCYTaskContext.recurse:
         run_children(task.children, root_task)

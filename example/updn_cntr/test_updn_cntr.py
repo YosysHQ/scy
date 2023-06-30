@@ -203,7 +203,7 @@ class TestComplexClass:
 @pytest.mark.parametrize("test", [
         {"name":  "trace_root", "sequence": ["trace now:", "cover cp_4:"],
                                 "data": ["4"],
-                                "error": "nothing to trace"},
+                                "error": "trace statement cannot be root"},
         {"name": "trace_child", "sequence": ["trace now:", " cover cp_4:"],
                                 "data": ["4"],
                                 "error": "trace statement does not support children"},
@@ -226,6 +226,9 @@ class TestComplexClass:
                                 "data": [],
                                 "error": "task produced no trace",
                                 "code": 1},
+        {"name":    "bad_cell", "sequence": ["add bad cell", ""],
+                                "data": [],
+                                "error": "cell type 'bad'"},
 ], scope="class")
 class TestErrorsClass:
     def test_runs(self, test: "dict[str, str | list]", scy_exec: subprocess.CompletedProcess):
