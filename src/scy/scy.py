@@ -117,7 +117,7 @@ class SCYTask():
         tree_task.depends_on(dir_task)
 
         # setupmode skip
-        if self.args.setupmode:
+        if self.args.setupmode or self.args.dump_common:
             return
 
         # output stats

@@ -57,7 +57,7 @@ def sequence(test):
     except KeyError:
         pass
 
-    sequence = []
+    sequence: "list[str]" = []
     regex = r"(\d+)"
     subst = r"cover cp_\g<0>:"
     for test in test["data"]:
@@ -113,6 +113,10 @@ def scy_cfg(scy_dir: Path, base_cfg: "dict[str, list[str]]", sequence, cover_stm
             f.write("\n".join(v))
             f.write("\n\n")
     return cfg
+
+@pytest.fixture(scope="class")
+def output_dir(scy_dir: Path, scy_cfg: Path):
+    return scy_dir / scy_cfg.stem
 
 @pytest.fixture(scope="class")
 def cmd_args(test: "dict[str, list[str]]"):
@@ -174,10 +178,9 @@ class TestComplexClass:
         scy_exec.check_returncode()
 
     @pytest.mark.usefixtures("scy_exec")
-    def test_files(self, test: "dict[str, str|list[str]]", scy_dir: Path, scy_cfg: Path):
+    def test_files(self, test: "dict[str, str|list[str]]", scy_dir: Path, output_dir: Path):
         assert test["name"] in scy_dir.name
         if "sequence" in test:
-            output_dir = scy_dir / scy_cfg.stem
             output_files = [f.name for f in output_dir.glob("*")]
             for stmt in test["sequence"]:
                 if not stmt:
@@ -229,6 +232,9 @@ class TestComplexClass:
         {"name":    "bad_cell", "sequence": ["add bad cell", ""],
                                 "data": [],
                                 "error": "cell type 'bad'"},
+        {"name":  "bad_enable", "sequence": ["enable bad cell", ""],
+                                "data": [],
+                                "error": "bad sequence"},
 ], scope="class")
 class TestErrorsClass:
     def test_runs(self, test: "dict[str, str | list]", scy_exec: subprocess.CompletedProcess):
@@ -255,29 +261,134 @@ class TestErrorsClass:
                  "args": []},
         {"name": "dump_tree", "data": ["1", " 2", "  3"],
                  "args": ["--dumptree"]},
+        {"name": "dump_common", "data": ["1", " 2", "  3"],
+                 "args": ["--dumpcommon"]},
         {"name": "setup_mode", "data": ["1", " 2", "  3"],
                  "args": ["--setup"]},
+        {"name": "tree_before_setup", "data": ["1", " 2", "  3"],
+                 "args": ["--setup", "--dumptree"]},
+        {"name": "common_before_setup", "data": ["1", " 2", "  3"],
+                 "args": ["--setup", "--dumpcommon"]},
+        {"name": "tree_before_common", "data": ["1", " 2", "  3"],
+                 "args": ["--dumptree", "--dumpcommon"]},
+        {"name": "with_errors", "data": ["1", " 2", "  3"],
+                 "args": ["-E"]},
 ], scope="class")
 class TestArgsClass:
-    def test_runs(self, test: "dict[str, str | list]", scy_exec: subprocess.CompletedProcess):
+    def test_runs(self, scy_exec: subprocess.CompletedProcess):
         scy_exec.check_returncode()
     
     @pytest.mark.usefixtures("scy_exec")
-    def test_files(self, test: "dict[str, str|list[str]]", scy_dir: Path, scy_cfg: Path):
-        output_dir = scy_dir / scy_cfg.stem
+    def test_files(self, test: "dict[str, str|list[str]]", output_dir: Path):
         if "--dumptree" in test["args"]:
             assert not output_dir.exists()
             return
         assert output_dir.exists()
+        sby_files = [f.name for f in output_dir.glob("*.sby")]
+        if "--dumpcommon" in test["args"]:
+            assert sby_files == ["common.sby"]
+        else:
+            assert len(sby_files) > 1
 
     def test_output(self, test: "dict[str, str | list]", sequence: "list[str]", scy_exec : subprocess.CompletedProcess):
         scy_out = bytes.decode(scy_exec.stdout)
         if "--dumptree" in test["args"]:
             for stmt in sequence:
                 assert stmt.strip(' :') in scy_out
-            return
+        elif "--dumpcommon" in test["args"]:
+            assert "preparing input" in scy_out
+
         for stmt in ["Chunks:"]:
-            if "--setup" in test["args"]:
+            no_trace_args = ["--setup", "--dumptree", "--dumpcommon"]
+            if any(arg in no_trace_args for arg in test["args"]):
                 assert stmt not in scy_out
             else:
                 assert stmt in scy_out
+
+@pytest.fixture(scope="class")
+def sequence_add_cells(sequence: "list[str]"):
+    return [s for s in sequence if "add" in s]
+
+@pytest.fixture(scope="class")
+def sequence_enable_cells(sequence: "list[str]"):
+    return [s for s in sequence if "enable" in s or "disable" in s]
+
+@pytest.fixture(scope="class")
+def common_sby(scy_exec, output_dir: Path) -> "dict[str, str]":
+    with open(output_dir / "common.sby", "r") as f:
+        sbydata = f.read()
+
+    stmt_regex = r"(?:^|\n)\[(?P<name>.*)\]\n(?P<body>(?:\n?.*)*?(?=\n\[|$))"
+    sections = re.finditer(stmt_regex, sbydata)
+    return { m['name']:m['body'] for m in sections }
+
+@pytest.fixture(scope="class")
+def sby_add_cells(common_sby: "dict[str, str]"):
+    add_cells: "list[tuple[str, str]]" = []
+    for line in common_sby["script"].splitlines():
+        if line.startswith("add"):
+            words = line.split()
+            add_cells.append((words[1][1:], words[2]))
+    return add_cells
+
+@pytest.fixture(scope="class")
+def sby_setattrs(common_sby: "dict[str, str]"):
+    return [s for s in common_sby["script"].splitlines() if s.startswith("setattr")]
+
+@pytest.mark.parametrize("test", [
+        {"name": "base_parse", "data": ["1", " 2", "  3"],
+                 "args": ["--dumpcommon"]},
+        {"name": "add_assume", "sequence": ["add assume cell"],
+                 "data": ["1"], "args": ["--dumpcommon"]},
+        {"name": "add_enable", "sequence": ["enable cell:", " cover cp_1"],
+                 "data": ["1"], "args": ["--dumpcommon"]},
+        {"name": "add_body_enable", "sequence": ["cover cp_1:", " enable this"],
+                 "data": ["1"], "args": ["--dumpcommon"]},
+        {"name": "add_more", "sequence": ["add assume cell", "add assert here"],
+                 "data": ["1"], "args": ["--dumpcommon"]},
+        {"name": "add_both", "sequence": ["add assume seven:", " disable three:", "  cover cp_2"],
+                 "data": ["1"], "args": ["--dumpcommon"]},
+], scope="class")
+class TestSBYGenClass:
+    def test_runs(self, scy_exec: subprocess.CompletedProcess):
+        scy_exec.check_returncode()
+
+    def test_includes_add_cells(self, sequence_add_cells: "list[str]", sby_add_cells: "list[tuple[str, str]]"):
+        for cell in sequence_add_cells:
+            found = False
+            for (type, name) in sby_add_cells:
+                if type in cell and name in cell:
+                    found = True
+                    break
+            assert found, f"{cell!r} not found in {sby_add_cells}"
+
+    def test_add_setattrs(self, sequence_add_cells: "list[str]", sby_setattrs: "list[str]"):
+        for cell in sequence_add_cells:
+            found = False
+            for setattr in sby_setattrs:
+                if "%ci:+[EN]" in setattr: # enable cell
+                    continue
+                name = re.search(r" w:(\S*) ", setattr).group(1)
+                if name in cell:
+                    found = True
+                    break
+            assert found, f"{cell!r} not found in {sby_setattrs}"
+
+    def test_enable_setattrs(self, sequence_enable_cells: "list[str]", sby_setattrs: "list[str]"):
+        for cell in sequence_enable_cells:
+            found = False
+            for setattr in sby_setattrs:
+                if "%ci:+[EN]" not in setattr: # add cell
+                    continue
+                name = name = re.search(r" c:(\S*) ", setattr).group(1)
+                if name in cell:
+                    found = True
+                    break
+            assert found, f"{cell!r} not found in {sby_setattrs}"
+
+    def test_add_log(self, sequence_add_cells, sequence_enable_cells, common_sby: "dict[str, str]"):
+        dump_str = "tee -o add_cells.log printattrs"
+        if sequence_add_cells or sequence_enable_cells:
+            assert dump_str in common_sby["script"]
+        else:
+            assert dump_str not in common_sby["script"]

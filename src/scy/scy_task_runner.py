@@ -122,6 +122,9 @@ def run_tree():
     with open(task_sby, 'w') as sbyfile:
         sbycfg.dump_common(sbyfile)
 
+    if scycfg.args.dump_common:
+        return
+
     sby_args = ["sby", "common.sby"]
     root_task = tl.Process(sby_args, cwd=workdir)
     root_task.events(tl.process.ExitEvent).handle(on_sby_exit)

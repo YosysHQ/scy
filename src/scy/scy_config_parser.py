@@ -16,7 +16,6 @@ def SCY_arg_parser():
     parser = argparse.ArgumentParser(prog="scy")
 
     # input arguments
-    # mostly just a quick hack while waiting for common frontend
     parser.add_argument("-d", metavar="<dirname>", dest="workdir",
             help="set workdir name. default: <jobname>")
     parser.add_argument("-f", action="store_true", dest="force",
