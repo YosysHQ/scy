@@ -104,8 +104,9 @@ def scy_cfg(request: pytest.FixtureRequest, cfg: str):
         return cfg
 
 @pytest.fixture(scope="class")
-def cmd_args():
-    return ["-f"]
+def cmd_args(tmp_path_factory: pytest.TempPathFactory):
+    workdir = tmp_path_factory.mktemp("hpm-", numbered=True)
+    return ["-f", "-d", workdir]
 
 @pytest.fixture(scope="class")
 def scy_dir(request: pytest.FixtureRequest):

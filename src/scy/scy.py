@@ -2,6 +2,7 @@
 
 import argparse
 import os
+from pathlib import Path
 import shutil
 from scy.scy_config_parser import SCYConfig, SCY_arg_parser
 from scy.scy_sby_bridge import SBYBridge
@@ -28,6 +29,7 @@ LogContext.app_name = "SCY"
 class SCYTask():
     def __init__(self, args: "argparse.Namespace | None" = None):
         self.args = args
+        self.localdir = False
 
     def parse_scyfile(self):
         scy_source = source_str.read_file(self.args.scyfile)
@@ -53,7 +55,11 @@ class SCYTask():
 
     def prep_sby(self):
         sbycfg = SBYBridge.from_scycfg(SCYRunnerContext.scycfg)
-        sbycfg.fix_relative_paths("..")
+        if self.localdir:
+            sbycfg.fix_relative_paths("..")
+        else:
+            scy_path = Path(self.args.scyfile).absolute().parent
+            sbycfg.fix_relative_paths(scy_path)
         with tl.root_task().as_current_task():
             SCYRunnerContext.sbycfg = sbycfg
             SCYRunnerContext.task_steps = {}
@@ -90,6 +96,7 @@ class SCYTask():
     def run(self):
         if self.args.workdir is None:
             self.args.workdir = self.args.scyfile.split('.')[0]
+            self.localdir = True
 
         # setup logging
         logging.start_logging()
