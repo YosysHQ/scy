@@ -1,0 +1,11 @@
+[project]
+name = "scy"
+version = "0.0.1"
+description = "Sequence of Covers with Yosys"
+
+dependencies = [
+    "yosys_mau"
+]
+
+[project.scripts]
+scy = "scy.scy:main"

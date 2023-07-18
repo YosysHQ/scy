@@ -1,0 +1,4 @@
+__pycache__/
+src/scy.egg-info
+htmlcov/
+.coverage*

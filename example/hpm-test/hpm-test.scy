@@ -1,0 +1,59 @@
+[design]
+# read source
+read -sv cover.sv wrapper.sv nerv.sv
+prep -flatten -nordff -top rvfi_testbench
+# remove testbench init assumption 
+delete c:$assume$rvfi_testbench.sv*
+
+[options]
+depth 10
+replay_vcd off
+
+[sequence]
+cover checker_inst.cp_reset_done:
+    disable checker_inst.ap_noreset
+    trace reset
+    cover checker_inst.cp_hpmcounter
+    cover checker_inst.cp_hpmevent2:
+        cover checker_inst.cp_hpmcounter:
+                trace hpm_event2
+
+    cover checker_inst.cp_hpmevent3:
+        cover checker_inst.cp_hpmcounter:
+            enable checker_inst.ap_nowrite
+            trace hpm_event3
+        append -3:
+            cover checker_inst.cp_hpmcounter:
+                trace hpm_event3_2
+
+[files]
+checks/rvfi_macros.vh
+checks/rvfi_channel.sv
+checks/rvfi_testbench.sv
+checks/rvfi_cover_check.sv
+nerv/wrapper.sv 
+nerv/nerv.sv
+cover_stmts.vh
+
+[file defines.sv]
+`define RISCV_FORMAL
+`define RISCV_FORMAL_NRET 1
+`define RISCV_FORMAL_XLEN 32
+`define RISCV_FORMAL_ILEN 32
+`define RISCV_FORMAL_CHECKER rvfi_cover_check
+`define RISCV_FORMAL_RESET_CYCLES 1
+`define RISCV_FORMAL_CHECK_CYCLE 10
+`define RISCV_FORMAL_CSR_MHPMCOUNTER3
+`define RISCV_FORMAL_CSR_MHPMEVENT3
+`define YOSYS // Hotfix for older Tabby CAD Releases
+`define NERV_RVFI
+`define NERV_FAULT
+`define RISCV_FORMAL_ALIGNED_MEM
+`define RISCV_FORMAL_MEM_FAULT
+`include "rvfi_macros.vh"
+
+[file cover.sv]
+`include "defines.sv"
+`include "rvfi_channel.sv"
+`include "rvfi_testbench.sv"
+`include "rvfi_cover_check.sv"
