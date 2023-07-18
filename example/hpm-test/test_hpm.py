@@ -97,8 +97,11 @@ def scy_cfg(request: pytest.FixtureRequest, cfg: str):
     if "gen_tests" in cfg:
         name = cfg.split('/', maxsplit=1)[1]
         config = gen_cfg(name)
-        filename = Path("gen_tests") / name
-        write_cfg(request.path.parent, filename, config)
+        gen_tests = Path("gen_tests")
+        root = request.path.parent
+        (root / gen_tests).mkdir(parents=True, exist_ok=True)
+        filename = gen_tests / name
+        write_cfg(root, filename, config)
         return filename
     else:
         return cfg
