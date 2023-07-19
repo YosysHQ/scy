@@ -32,6 +32,11 @@ def SCY_arg_parser():
             help="prepare common input and exit")
     parser.add_argument("--setup", action="store_true", dest="setupmode",
             help="set up the working directory and exit")
+    parser.add_argument("--debug", action="store_true", dest="log_debug",
+            help="log debug events")
+    
+    parser.add_argument("--logfile", type=argparse.FileType('w'), dest="logfile",
+            help="name of file to log to")
 
     parser.add_argument('scyfile', metavar="<jobname>.scy",
             help=".scy file")

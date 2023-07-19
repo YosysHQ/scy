@@ -100,6 +100,10 @@ class SCYTask():
 
         # setup logging
         logging.start_logging()
+        if self.args.logfile:
+            logging.start_logging(self.args.logfile)
+        if self.args.log_debug:
+            logging.start_debug_event_logging(self.args.logfile)
 
         # parse scy file
         parse_task = tl.Task(self.parse_scyfile)
