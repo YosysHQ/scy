@@ -57,12 +57,35 @@ def gen_traces(task: TaskTree) -> "list[str]":
     traces.reverse()
     return traces
 
-def on_sby_exit(event: tl.process.ExitEvent):
+def on_proc_err(event: tl.process.StderrEvent):
+    tl.log_warning(event.output)
+
+def on_proc_exit(event: tl.process.ExitEvent):
     if event.returncode != 0:
+        # find what failed
         event_task = cast(tl.Process, event.source)
-        event_sby = Path(event_task.command[-1])
+        exe_name = event_task.command[0]
+        event_cmd = " ".join(event_task.command)
+        input_file = Path(event_task.command[-1])
         event_dir = Path(event_task.cwd)
-        err = SCYSubProcessException(target=event_sby, logfile=event_dir / event_sby.stem / 'logfile.txt')
+        logfile: Path = (event_dir / input_file.stem / 'logfile.txt') if "sby" in exe_name else None
+
+        # check reported error
+        bestguess = None
+        if SCYRunnerContext.scycfg.args.check_error:
+            if "sby" in exe_name:
+                # open log file
+                with open(logfile, "r") as f:
+                    log = f.read()
+                regex = r"ERROR: (.*)"
+                bestguess = re.findall(regex, log, flags=re.MULTILINE)
+                if 'Shell command failed!' in bestguess:
+                    bestguess.append("may be missing vcd2fst")
+            elif "yosys-witness" in exe_name:
+                bestguess = "may be missing yw_join feature"
+
+        # log and raise error
+        err = SCYSubProcessException(event_cmd, logfile, bestguess)
         tl.log_exception(err)
 
 @tl.task_context
@@ -127,7 +150,8 @@ def run_tree():
 
     sby_args = ["sby", "common.sby"]
     root_task = tl.Process(sby_args, cwd=workdir)
-    root_task.events(tl.process.ExitEvent).handle(on_sby_exit)
+    root_task.events(tl.process.ExitEvent).handle(on_proc_exit)
+    root_task.events(tl.process.StderrEvent).handle(on_proc_err)
 
     if scycfg.options.replay_vcd and not scycfg.options.design_scope:
         # load top level design name back from generated model
@@ -201,7 +225,7 @@ def run_task():
             # run sby
             sby_args = ["sby", "-f", f"{task.dir}.sby"]
             root_task = tl.Process(sby_args, cwd=workdir)
-            root_task.events(tl.process.ExitEvent).handle(on_sby_exit)
+            root_task.events(tl.process.ExitEvent).handle(on_proc_exit)
             root_task.events(tl.process.OutputEvent).process(handle_cover_output)
     elif task.stmt == "trace":
         if SCYRunnerContext.scycfg.options.replay_vcd:
@@ -225,6 +249,8 @@ def run_task():
             # now use yosys to replay trace and generate vcd
             yw_args.append(f"{task.name}.yw")
             yw_proc = tl.Process(yw_args, cwd=workdir)
+            yw_proc.events(tl.process.ExitEvent).handle(on_proc_exit)
+            yw_proc.events(tl.process.StderrEvent).handle(on_proc_err)
             common_il = SCYRunnerContext.sbycfg.files[0].split()[-1]
             yosys_args = [
                 "yosys", "-p", 
@@ -232,6 +258,8 @@ def run_task():
             ]
             yosys_proc = tl.Process(yosys_args, cwd=workdir)
             yosys_proc.depends_on(yw_proc)
+            yosys_proc.events(tl.process.ExitEvent).handle(on_proc_exit)
+            yosys_proc.events(tl.process.StderrEvent).handle(on_proc_err)
     elif task.stmt == "append":
         if SCYRunnerContext.scycfg.options.replay_vcd:
             log_exception(SCYTreeError(task.stmt, "replay_vcd option incompatible with append statement"))

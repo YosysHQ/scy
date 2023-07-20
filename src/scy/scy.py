@@ -19,6 +19,7 @@ import yosys_mau.task_loop as tl
 from yosys_mau.task_loop import (
     LogContext,
     log,
+    log_warning,
     log_exception,
     logging
 )
@@ -152,6 +153,8 @@ def main():
         if args.throw_err:
             import traceback
             traceback.print_exc()
+        else:
+            log_warning("run with -E to print full stacktrace")
         log_exception(e, raise_error=False)
         exit(1)
 

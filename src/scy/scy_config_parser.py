@@ -34,7 +34,9 @@ def SCY_arg_parser():
             help="set up the working directory and exit")
     parser.add_argument("--debug", action="store_true", dest="log_debug",
             help="log debug events")
-    
+    parser.add_argument("--checkerror", action="store_true", dest="check_error",
+            help="enable rudimentary error checking to help with error messages from sub processes")
+
     parser.add_argument("--logfile", type=argparse.FileType('w'), dest="logfile",
             help="name of file to log to")
 
