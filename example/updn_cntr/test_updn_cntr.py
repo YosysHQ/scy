@@ -122,7 +122,7 @@ def output_dir(scy_dir: Path, scy_cfg: Path):
 def cmd_args(test: "dict[str, list[str]]"):
     args = test.get("args", [])
     if "error" in test:
-        args.append("-E")
+        args.extend("-E --checkerror".split())
     return args
 
 @pytest.mark.parametrize("test", [
@@ -212,7 +212,7 @@ class TestComplexClass:
                                 "error": "trace statement does not support children"},
         {"name":  "bad_parent", "sequence": ["cover cp_1:", " cover cp_2"],
                                 "data": [],
-                                "error": "sby produced an error",},
+                                "error": "sby' produced an error",},
         {"name":     "bad_seq", "sequence": ["123", "abc"],
                                 "cover_stmts": ["", "//blank"],
                                 "error": "bad sequence"},
@@ -220,7 +220,7 @@ class TestComplexClass:
                                 "cover_stmts": ["", "//blank"],
                                 "error": "no cover sequences"},
         {"name":  "fail_depth", "data": ["1", " 2", "  3", "  44"],
-                                "error": "sby produced an error"},
+                                "error": "sby' produced an error"},
         {"name":   "fail_data", "data": [], "error": "no cover sequences"},
         {"name":     "bad_dir", "data": ["1"],
                                 "args": ["-d", "this_dir"], "mkdir": "this_dir",
