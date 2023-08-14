@@ -172,6 +172,7 @@ def cmd_args(test: "dict[str, list[str]]"):
                  "data": ["4", "3"]},
         {"name": "tree_comment", "sequence": ["cover cp_4", "#comment", "cover cp_3"],
                  "data": ["4", "3"]},
+        {"name": "big_tree", "data": ["1", " 2", "  3", "   4", "    5", "     6", "      7", "       8", "        9", "         10"]}
 ], scope="class")
 class TestComplexClass:
     def test_runs(self, scy_exec: subprocess.CompletedProcess):

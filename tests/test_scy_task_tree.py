@@ -150,6 +150,26 @@ def test_no_colon_name(no_colon):
     task_tree = no_colon[0]
     assert task_tree.name == "a"
 
+@pytest.fixture(params=[
+    {"input_str": "cover a:\n cover b:\n\tcover c:",
+     "expected_lens": [3, 1, 1]},
+    {"input_str": "cover a:\n cover b:\n\t cover c:",
+     "expected_lens": [3, 1, 1]},
+    {"input_str": "cover a:\n cover b:\n\t trace c",
+     "expected_lens": [3, 1, 1]},
+])
+def mixed_spacing_input(request):
+    return request.param
+
+@pytest.fixture
+def mixed_spacing_tree(mixed_spacing_input):
+    return TaskTree.from_string(mixed_spacing_input["input_str"])
+
+def test_mixed_spacing(mixed_spacing_input, mixed_spacing_tree):
+    expected = mixed_spacing_input["expected_lens"]
+    actual = get_tree_list(lambda x: len(x), mixed_spacing_tree[0])
+    assert actual == expected
+
 @pytest.fixture
 def enable_tree():
     a = TaskTree("a", "cover", 0)

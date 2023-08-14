@@ -11,6 +11,8 @@ from yosys_mau.config_parser import (
     StrValue,
     postprocess_section
 )
+from yosys_mau.task_loop import log_warning
+from yosys_mau.source_str import re, source_map
 
 def SCY_arg_parser():
     parser = argparse.ArgumentParser(prog="scy")
@@ -63,6 +65,13 @@ class SCYConfig(ConfigParser):
     options = OptionsSection(SCYOptions)
     @postprocess_section(StrSection())
     def sequence (self, sequence: str) -> "list[TaskTree | str]":
+        # give a warning if whitespace mixes spaces and tabs
+        ws_regex = r"^(?P<ws>[ \t]*)"
+        for line in re.finditer(ws_regex, sequence, flags=re.MULTILINE):
+            src = line.group()
+            if " " in src and "\t" in src:
+                log_warning(f"mixed whitespace at {source_map(src)}")
+        # parse tree
         tree_list = TaskTree.from_string(sequence)
         for tree in tree_list:
             if isinstance(tree, str) and tree.startswith("#"):
