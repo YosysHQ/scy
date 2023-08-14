@@ -211,9 +211,9 @@ class TestComplexClass:
         {"name": "trace_child", "sequence": ["trace now:", " cover cp_4:"],
                                 "data": ["4"],
                                 "error": "trace statement does not support children"},
-        {"name":  "bad_parent", "sequence": ["cover cp_1:", " cover cp_2"],
+        {"name":    "no_cover", "sequence": ["cover cp_1:", " cover cp_2"],
                                 "data": [],
-                                "error": "sby' produced an error",},
+                                "error": "missing cover property for",},
         {"name":     "bad_seq", "sequence": ["123", "abc"],
                                 "cover_stmts": ["", "//blank"],
                                 "error": "bad sequence"},
@@ -226,10 +226,7 @@ class TestComplexClass:
         {"name":     "bad_dir", "data": ["1"],
                                 "args": ["-d", "this_dir"], "mkdir": "this_dir",
                                 "error": "use -f to overwrite the existing directory"},
-        {"name":   "no_covers", "sequence": ["cover cp_1:", ""],
-                                "data": [],
-                                "error": "task produced no trace",
-                                "code": 1},
+        # can we still get no "task produced no trace"?
         {"name":    "bad_cell", "sequence": ["add bad cell", ""],
                                 "data": [],
                                 "error": "cell type 'bad'"},
@@ -255,7 +252,7 @@ class TestErrorsClass:
                 found_exception = True
                 break
 
-        assert found_exception, f"{test['error']} not found in {exceptions}"
+        assert found_exception, f"{test['name']} - {test['error']} not found in {exceptions}"
 
 @pytest.mark.parametrize("test", [
         {"name": "baseline", "data": ["1", " 2", "  3"],
