@@ -184,6 +184,7 @@ def gen_sby(task: TaskTree, sbycfg: SBYBridge, scycfg: SCYConfig,
         traces_script.append(f"sim -w -r {trace}{trace_scope}")
     if task.stmt == "cover":
         traces_script.append(f"delete t:$cover c:{task.name} %d")
+        traces_script.append(f"select -assert-count 1 t:$cover")
         sbycfg.script.extend(traces_script)
     else:
         raise NotImplementedError(task.stmt)
