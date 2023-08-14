@@ -81,6 +81,8 @@ def on_proc_exit(event: tl.process.ExitEvent):
                 bestguess = re.findall(regex, log, flags=re.MULTILINE)
                 if 'Shell command failed!' in bestguess:
                     bestguess.append("may be missing vcd2fst")
+                if 'Assertion failed:' in bestguess[0]:
+                    bestguess.append(f"missing cover property for {SCYTaskContext.task.name!r}")
             elif "yosys-witness" in exe_name:
                 bestguess = "may be missing yw_join feature"
 
