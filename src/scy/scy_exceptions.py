@@ -29,8 +29,12 @@ class SCYSubProcessException(Exception):
         self.logfile = logfile
         self.bestguess = bestguess
 
+    @property
+    def msg(self) -> str:
+        return "produced an error"
+
     def __str__(self) -> str:
-        error_str = f"{self.command!r} produced an error"
+        error_str = f"{self.command!r} {self.msg}"
         if self.logfile:
             error_str += f", see {self.logfile} for more information"
         if self.bestguess:

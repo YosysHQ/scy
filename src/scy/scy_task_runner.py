@@ -65,29 +65,24 @@ def on_proc_exit(event: tl.process.ExitEvent):
         # find what failed
         event_task = cast(tl.Process, event.source)
         exe_name = event_task.command[0]
-        event_cmd = " ".join(event_task.command)
-        input_file = Path(event_task.command[-1])
-        event_dir = Path(event_task.cwd)
-        logfile: Path = (event_dir / input_file.stem / 'logfile.txt') if "sby" in exe_name else None
 
-        # check reported error
-        bestguess = None
-        if SCYRunnerContext.scycfg.args.check_error:
-            if "sby" in exe_name:
-                # open log file
-                with open(logfile, "r") as f:
-                    log = f.read()
-                regex = r"ERROR: (.*)"
-                bestguess = re.findall(regex, log, flags=re.MULTILINE)
-                if 'Shell command failed!' in bestguess:
-                    bestguess.append("may be missing vcd2fst")
-                if 'Assertion failed:' in bestguess[0]:
-                    bestguess.append(f"missing cover property for {SCYTaskContext.task.name!r}")
-            elif "yosys-witness" in exe_name:
-                bestguess = "may be missing yw_join feature"
+        # run bridge error handler
+        if "sby" in exe_name:
+            err = SCYRunnerContext.sbycfg.handle_error(
+                event_task, SCYRunnerContext.scycfg.args.check_error, SCYTaskContext.task
+            )
+        else:
+            # generic error handler
+            event_cmd = " ".join(event_task.command)
 
-        # log and raise error
-        err = SCYSubProcessException(event_cmd, logfile, bestguess)
+            # check reported error
+            bestguess = None
+            if SCYRunnerContext.scycfg.args.check_error:
+                if "yosys-witness" in exe_name:
+                    bestguess = "may be missing yw_join feature"
+
+            # log and raise error
+            err = SCYSubProcessException(event_cmd, None, bestguess)
         tl.log_exception(err)
 
 @tl.task_context

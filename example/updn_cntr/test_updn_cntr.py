@@ -221,7 +221,7 @@ class TestComplexClass:
                                 "cover_stmts": ["", "//blank"],
                                 "error": "no cover sequences"},
         {"name":  "fail_depth", "data": ["1", " 2", "  3", "  44"],
-                                "error": "sby' produced an error"},
+                                "error": "unreached cover statement"},
         {"name":   "fail_data", "data": [], "error": "no cover sequences"},
         {"name":     "bad_dir", "data": ["1"],
                                 "args": ["-d", "this_dir"], "mkdir": "this_dir",

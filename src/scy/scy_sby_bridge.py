@@ -1,8 +1,20 @@
 import copy
 import os
 from pathlib import Path
+import re
 from scy.scy_config_parser import SCYConfig
+from scy.scy_exceptions import SCYSubProcessException
 from scy.scy_task_tree import TaskTree
+from yosys_mau import task_loop
+
+class SBYException(SCYSubProcessException):
+    def __init__(self, command: str, logfile=None, bestguess=None, typ: str = "UNKNOWN") -> None:
+        super().__init__(command, logfile, bestguess)
+        self.typ = typ
+
+    @property
+    def msg(self) -> str:
+        return f"returned {self.typ}"
 
 def from_scycfg(scycfg: SCYConfig):
     sbycfg = SBYBridge()
@@ -91,7 +103,49 @@ class SBYBridge():
         for key in list(self.data.keys()):
             if "file " in key:
                 self.data.pop(key)
-    
+
+    def handle_error(self, event_task: task_loop.Process,
+                     check_error: bool, failed_task: TaskTree) -> "Exception | None":
+        task_loop.LogContext.scope += " SBY"
+        event_cmd = " ".join(event_task.command)
+        input_file = Path(event_task.command[-1])
+        event_dir = Path(event_task.cwd)
+        logfile: Path = (event_dir / input_file.stem / 'logfile.txt')
+        return_code = event_task.returncode
+        bestguess = []
+
+        if return_code == 2:
+            typ = "FAIL"
+        elif return_code == 4:
+            typ = "UNKNOWN"
+        elif return_code == 8:
+            typ = "TIMEOUT"
+        elif return_code == 16:
+            typ = "ERROR"
+
+        # open log file
+        with open(logfile, "r") as f:
+            log = f.read()
+
+        # log summary
+        regex = r"summary: (.*)"
+        summary: "list[str]" = re.findall(regex, log, flags=re.MULTILINE)
+        for msg in summary:
+            task_loop.log_warning(msg)
+            if check_error and 'unreached cover statements' in msg:
+                bestguess.append(f"unreached cover statement for {failed_task.name!r}")
+
+        # check reported error
+        regex = r"(ERROR): (.*)"
+        problems: "list[tuple[str, str]]" = re.findall(regex, log, flags=re.MULTILINE)
+        for _, msg in problems:
+            if check_error and 'Shell command failed!' in msg:
+                bestguess.append("may be missing vcd2fst")
+            if check_error and 'Assertion failed:' in msg:
+                bestguess.append(f"missing cover property for {failed_task.name!r}")
+        
+        return SBYException(event_cmd, logfile, bestguess, typ)
+
     from_scycfg = staticmethod(from_scycfg)
 
 def parse_common_sby(common_task: TaskTree, sbycfg: SBYBridge, scycfg: SCYConfig):
