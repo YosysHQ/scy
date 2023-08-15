@@ -4,6 +4,8 @@ import subprocess
 import shutil
 from pathlib import Path
 
+from scy.scy_task_tree import TaskTree
+
 # example up_counter.scy
 """[design]
 read -sv up_counter.sv
@@ -137,6 +139,9 @@ def cmd_args(test: "dict[str, list[str]]"):
         {"name": "simple", "data": ["4", " 12", " 14", "  12"]},
         {"name": "good_trace", "sequence": ["cover cp_4:", " trace now:"],
                  "data": ["4"]},
+        {"name": "trace_final", "sequence": ["cover cp_1:", " cover cp_2", "cover cp_3"],
+                 "args": ["--tracefinal"],
+                 "data": ["1", "2", "3"], "chunks": [1, 1, 3]},
         {"name": "add_reverse", "sequence": ["cover cp_254:",
                                              " add assume reverse:",
                                              "  cover cp_253"],
@@ -182,23 +187,33 @@ class TestComplexClass:
     def test_files(self, test: "dict[str, str|list[str]]", scy_dir: Path, output_dir: Path):
         assert test["name"] in scy_dir.name
         if "sequence" in test:
-            output_files = [f.name for f in output_dir.glob("*")]
+            # get all output files for cover and trace statements
+            output_files = [f.name for f in output_dir.glob("*") if f.suffix in [".sby", ".vcd"]]
             for stmt in test["sequence"]:
                 if not stmt:
                     continue
                 found_match = False
-                name = stmt.split()[-1].strip(':')
-                if "cover" in stmt:
-                    match_str = f"{name}.sby"
-                elif "trace" in stmt:
-                    match_str = f"{name}.vcd"
-                else:
-                    continue
+
+                # find name to match
+                task = TaskTree.from_string(stmt)[0]
+                if not (isinstance(task, TaskTree) and task.is_runnable): continue
+                if "cover" in stmt: match_str = f"{task.name}.sby"
+                elif "trace" in stmt: match_str = f"{task.name}.vcd"
+                else: continue
+
+                # attempt to match
                 for file in output_files:
                     if match_str in file:
                         found_match = True
                         break
                 assert found_match, f"{match_str} not found in {output_files} for test {test['name']!r}"
+                output_files.remove(file)
+
+            # check unmatched files
+            output_files.remove("common.sby")
+            if "--tracefinal" in test.get("args", []):
+                output_files.remove("__final.vcd")
+            assert not output_files, f"unmatched files {output_files}"
 
     def test_chunks(self, test: "dict[str]", scy_chunks: "list[int]"):
         if "chunks" in test:

@@ -57,6 +57,30 @@ def gen_traces(task: TaskTree) -> "list[str]":
     traces.reverse()
     return traces
 
+def dump_trace(task: TaskTree, workdir: Path):
+    # prepare yosys
+    traces = gen_traces(task)
+
+    # run yosys-witness to concatenate all traces
+    yw_args = ["yosys-witness", "yw2yw"]
+    for trace in traces:
+        yw_args.extend(trace.split())
+
+    # now use yosys to replay trace and generate vcd
+    yw_args.append(f"{task.name}.yw")
+    yw_proc = tl.Process(yw_args, cwd=workdir)
+    yw_proc.events(tl.process.ExitEvent).handle(on_proc_exit)
+    yw_proc.events(tl.process.StderrEvent).handle(on_proc_err)
+    common_il = SCYRunnerContext.sbycfg.files[0].split()[-1]
+    yosys_args = [
+        "yosys", "-p", 
+        f"read_rtlil {common_il}; sim -hdlname -r {task.name}.yw -vcd {task.name}.vcd"
+    ]
+    yosys_proc = tl.Process(yosys_args, cwd=workdir)
+    yosys_proc.depends_on(yw_proc)
+    yosys_proc.events(tl.process.ExitEvent).handle(on_proc_exit)
+    yosys_proc.events(tl.process.StderrEvent).handle(on_proc_err)
+
 def on_proc_err(event: tl.process.StderrEvent):
     tl.log_warning(event.output)
 
@@ -189,6 +213,11 @@ def run_tree():
         parse_adds_task.depends_on(root_task)
         root_task = parse_adds_task
 
+    # add final trace
+    if SCYRunnerContext.scycfg.args.trace_final:
+        all_tasks = list(common_task.traverse(include_self = True))
+        all_tasks[-1].add_children(TaskTree.from_string("trace __final"))
+
     # modify config for full sby runs
     common_il = os.path.join('common', 'model', 'design_prep.il')
     sbycfg.prep_shared(common_il)
@@ -235,28 +264,7 @@ def run_task():
             log_exception(SCYTreeError(task.full_line, "trace requires common sby generation"))
 
         if not setupmode:
-            # prepare yosys
-            traces = gen_traces(task)
-
-            # run yosys-witness to concatenate all traces
-            yw_args = ["yosys-witness", "yw2yw"]
-            for trace in traces:
-                yw_args.extend(trace.split())
-
-            # now use yosys to replay trace and generate vcd
-            yw_args.append(f"{task.name}.yw")
-            yw_proc = tl.Process(yw_args, cwd=workdir)
-            yw_proc.events(tl.process.ExitEvent).handle(on_proc_exit)
-            yw_proc.events(tl.process.StderrEvent).handle(on_proc_err)
-            common_il = SCYRunnerContext.sbycfg.files[0].split()[-1]
-            yosys_args = [
-                "yosys", "-p", 
-                f"read_rtlil {common_il}; sim -hdlname -r {task.name}.yw -vcd {task.name}.vcd"
-            ]
-            yosys_proc = tl.Process(yosys_args, cwd=workdir)
-            yosys_proc.depends_on(yw_proc)
-            yosys_proc.events(tl.process.ExitEvent).handle(on_proc_exit)
-            yosys_proc.events(tl.process.StderrEvent).handle(on_proc_err)
+            dump_trace(task, workdir)
     elif task.stmt == "append":
         if SCYRunnerContext.scycfg.options.replay_vcd:
             log_exception(SCYTreeError(task.stmt, "replay_vcd option incompatible with append statement"))

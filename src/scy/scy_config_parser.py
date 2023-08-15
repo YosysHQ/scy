@@ -38,6 +38,8 @@ def SCY_arg_parser():
             help="log debug events")
     parser.add_argument("--checkerror", action="store_true", dest="check_error",
             help="enable rudimentary error checking to help with error messages from sub processes")
+    parser.add_argument("--tracefinal", action="store_true", dest="trace_final",
+            help="always dump complete trace for last successful task, even if an error occurred after")
 
     parser.add_argument("--logfile", type=argparse.FileType('w'), dest="logfile",
             help="name of file to log to")
