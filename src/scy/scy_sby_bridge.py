@@ -139,11 +139,13 @@ class SBYBridge():
         regex = r"(ERROR): (.*)"
         problems: "list[tuple[str, str]]" = re.findall(regex, log, flags=re.MULTILINE)
         for _, msg in problems:
+            task_loop.log_error(msg, raise_error = False)
             if check_error and 'Shell command failed!' in msg:
                 bestguess.append("may be missing vcd2fst")
-            if check_error and 'Assertion failed:' in msg:
+            if check_error and 'selection contains 0 elements' in msg:
                 bestguess.append(f"missing cover property for {failed_task.name!r}")
         
+        task_loop.LogContext.scope = task_loop.LogContext.scope[0:-4]
         return SBYException(event_cmd, logfile, bestguess, typ)
 
     from_scycfg = staticmethod(from_scycfg)

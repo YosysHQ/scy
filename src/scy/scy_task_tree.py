@@ -83,6 +83,8 @@ class TaskTree:
         return self
 
     def add_child(self, child: "TaskTree"):
+        if child.parent:
+            raise NotImplementedError("reassigning child's parent without unassigning other parent's child")
         child.parent = self
         self.children.append(child)
         child.depth = self.depth

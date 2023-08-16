@@ -8,6 +8,8 @@ from scy.scy_config_parser import SCYConfig, SCY_arg_parser
 from scy.scy_sby_bridge import SBYBridge
 from scy.scy_task_runner import (
     SCYRunnerContext,
+    SCYTaskContext,
+    dump_trace,
     run_tree
 )
 from scy.scy_task_tree import TaskTree
@@ -31,6 +33,7 @@ class SCYTask():
     def __init__(self, args: "argparse.Namespace | None" = None):
         self.args = args
         self.localdir = False
+        self.failed_tree = None
 
     def parse_scyfile(self):
         scy_source = source_str.read_file(self.args.scyfile)
@@ -77,24 +80,42 @@ class SCYTask():
             if task.stmt not in ["append", "cover"]:
                 continue
             task.steps = SCYRunnerContext.task_steps.get(f"{task.linestr}_{task.name}")
-            if not task.steps:
-                err = SCYMissingTraceException(task.full_line, "task produced no trace")
-                log_exception(err)
+            if task.steps:
+                steps_str = f"{task.steps:2}"
+                cycles_str = f"{task.start_cycle:2} .. {task.stop_cycle:2}"
+            elif task == self.failed_tree:
+                steps_str = " 0"
+                cycles_str = "FAILED  "
+            else:
+                steps_str = " 0"
+                cycles_str = "ABORTED "
             chunk_str = " "*task.depth + f"L{task.line}"
-            cycles_str = f"{task.start_cycle:2} .. {task.stop_cycle:2}"
             task_str = task.name if task.is_runnable else f"{task.stmt} {task.name}"
-            log(f"  {chunk_str:6}  {cycles_str}  =>  {task.steps:2}  {task_str}")
+            log(f"  {chunk_str:6}  {cycles_str}  =>  {steps_str}  {task_str}")
 
         if trace_tasks:
             log("Traces:")
         for task in trace_tasks:
-            cycles_str = f"{task.stop_cycle + 1:>2} cycles"
-            chunks = task.parent.get_all_linestr()
-            chunks.sort()
-            chunks_str = " ".join(chunks)
-            log(f"  {task.name:12} {cycles_str} [{chunks_str}]")
+            try:
+                cycles_str = f"{task.stop_cycle + 1} cycles"
+                chunks = task.parent.get_all_linestr()
+                chunks.sort()
+                chunks_str = " ".join(chunks)
+                log(f"  {task.name:12} {cycles_str} [{chunks_str}]")
+            except TypeError:
+                log(f"  {task.name:12} N/A")
 
-    def run(self):
+    def trace_final(self, exc: BaseException):
+        # Find last successful task
+        while isinstance(exc.__cause__, tl.ChildFailed):
+            exc = exc.__cause__
+
+        if isinstance(exc, tl.ChildFailed):
+            self.failed_tree = exc.task[SCYTaskContext].task
+        else:
+            tl.log_exception(exc, raise_error=True)
+
+    async def run(self):
         if self.args.workdir is None:
             self.args.workdir = self.args.scyfile.split('.')[0]
             self.localdir = True
@@ -132,10 +153,40 @@ class SCYTask():
         if self.args.setupmode or self.args.dump_common:
             return
 
-        # output stats
+        # recover last task before failure
+        tree_task.handle_error(handler=self.trace_final)
+        try:
+            await tree_task.finished
+        except tl.TaskFailed as exc:
+            if not SCYRunnerContext.scycfg.args.trace_final:
+                tl.log_exception(exc)
+
+        # prepare stats task
         display_task = tl.Task(on_run=self.display_stats)
-        display_task.depends_on(tree_task)
         display_task[LogContext].scope = "stats"
+
+        if SCYRunnerContext.scycfg.args.trace_final:
+            final_trace = TaskTree.from_string("trace __final")[0]
+            if tree_task.state == "failed":
+                # add trace to recovered task
+                tl.LogContext.scope = "final trace"
+                final_task = self.failed_tree.parent
+                tl.log_warning(f"dumping trace from last successful task {final_task.linestr!r} to '__final.vcd'")
+                final_task.add_child(final_trace)
+            else:
+                # add trace to final task
+                scycfg = SCYRunnerContext.scycfg
+                common_task = scycfg.root
+                all_tasks = list(common_task.traverse(include_self = True))
+                all_tasks.reverse()
+                for task in all_tasks:
+                    if task.stmt != "cover":
+                        continue
+                    task.add_child(final_trace)
+                    break
+            # run final trace
+            final_trace_task = dump_trace(final_trace, SCYRunnerContext.scycfg.args.workdir)
+            display_task.depends_on(final_trace_task)
 
 def main():
     # read args

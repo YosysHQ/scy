@@ -80,11 +80,12 @@ def dump_trace(task: TaskTree, workdir: Path):
     yosys_proc.depends_on(yw_proc)
     yosys_proc.events(tl.process.ExitEvent).handle(on_proc_exit)
     yosys_proc.events(tl.process.StderrEvent).handle(on_proc_err)
+    return yosys_proc
 
 def on_proc_err(event: tl.process.StderrEvent):
     tl.log_warning(event.output)
 
-def on_proc_exit(event: tl.process.ExitEvent):
+async def on_proc_exit(event: tl.process.ExitEvent):
     if event.returncode != 0:
         # find what failed
         event_task = cast(tl.Process, event.source)
@@ -212,11 +213,6 @@ def run_tree():
         parse_adds_task = tl.Task(on_run=parse_add_log)
         parse_adds_task.depends_on(root_task)
         root_task = parse_adds_task
-
-    # add final trace
-    if SCYRunnerContext.scycfg.args.trace_final:
-        all_tasks = list(common_task.traverse(include_self = True))
-        all_tasks[-1].add_children(TaskTree.from_string("trace __final"))
 
     # modify config for full sby runs
     common_il = os.path.join('common', 'model', 'design_prep.il')
