@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 import shutil
 from scy.scy_config_parser import SCYConfig, SCY_arg_parser
-from scy.scy_sby_bridge import SBYBridge
+from scy.scy_sby_bridge import SBYBridge, SBYException
 from scy.scy_task_runner import (
     SCYRunnerContext,
     SCYTaskContext,
@@ -13,9 +13,6 @@ from scy.scy_task_runner import (
     run_tree
 )
 from scy.scy_task_tree import TaskTree
-from scy.scy_exceptions import (
-    SCYMissingTraceException,
-)
 from yosys_mau import source_str
 import yosys_mau.task_loop as tl
 from yosys_mau.task_loop import (
@@ -110,7 +107,7 @@ class SCYTask():
         while isinstance(exc.__cause__, tl.ChildFailed):
             exc = exc.__cause__
 
-        if isinstance(exc, tl.ChildFailed):
+        if isinstance(exc, tl.ChildFailed) and isinstance(exc.__cause__.__cause__, SBYException):
             self.failed_tree = exc.task[SCYTaskContext].task
         else:
             tl.log_exception(exc, raise_error=True)

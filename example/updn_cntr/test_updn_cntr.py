@@ -241,7 +241,6 @@ class TestComplexClass:
         {"name":     "bad_dir", "data": ["1"],
                                 "args": ["-d", "this_dir"], "mkdir": "this_dir",
                                 "error": "use -f to overwrite the existing directory"},
-        # can we still get no "task produced no trace"?
         {"name":    "bad_cell", "sequence": ["add bad cell", ""],
                                 "data": [],
                                 "error": "cell type 'bad'"},
