@@ -237,6 +237,9 @@ class TestComplexClass:
                                 "error": "no cover sequences"},
         {"name":  "fail_depth", "data": ["1", " 2", "  3", "  44"],
                                 "error": "unreached cover statement"},
+        {"name": "fail_depth2", "data": ["1", " 2", "  3", "  44"],
+                                "error": "unreached cover statement",
+                                "args": ["--tracefinal"], "code": 0},
         {"name":   "fail_data", "data": [], "error": "no cover sequences"},
         {"name":     "bad_dir", "data": ["1"],
                                 "args": ["-d", "this_dir"], "mkdir": "this_dir",
@@ -256,7 +259,10 @@ class TestErrorsClass:
             with pytest.raises(subprocess.CalledProcessError):
                 scy_exec.check_returncode()
 
-        stderr = bytes.decode(scy_exec.stderr)
+        if test.get("code") == 0:
+            stderr = bytes.decode(scy_exec.stdout)
+        else:
+            stderr = bytes.decode(scy_exec.stderr)
         exception_regex = r"^(?P<e>.*): (?P<m>.*)$"
         exceptions = re.findall(exception_regex, stderr, flags=re.MULTILINE)
 
@@ -285,6 +291,10 @@ class TestErrorsClass:
                  "args": ["--dumptree", "--dumpcommon"]},
         {"name": "with_errors", "data": ["1", " 2", "  3"],
                  "args": ["-E"]},
+        {"name": "tracefinal_outputs", "data": ["1", " 2", "  3"],
+                 "args": ["--tracefinal"]},
+        {"name": "tracefinal_recovers", "data": ["1", " 2", "  3", "  44"],
+                 "args": ["--tracefinal"]},
 ], scope="class")
 class TestArgsClass:
     def test_runs(self, scy_exec: subprocess.CompletedProcess):
@@ -301,14 +311,17 @@ class TestArgsClass:
             assert sby_files == ["common.sby"]
         else:
             assert len(sby_files) > 1
+            if "--tracefinal" in test["args"]:
+                assert (output_dir / "__final.vcd").exists()
 
     def test_output(self, test: "dict[str, str | list]", sequence: "list[str]", scy_exec : subprocess.CompletedProcess):
         scy_out = bytes.decode(scy_exec.stdout)
         if "--dumptree" in test["args"]:
             for stmt in sequence:
                 assert stmt.strip(' :') in scy_out
-        elif "--dumpcommon" in test["args"]:
-            assert "preparing input" in scy_out
+        else:
+            if "--dumpcommon" in test["args"]:
+                assert "preparing input" in scy_out
 
         for stmt in ["Chunks:"]:
             no_trace_args = ["--setup", "--dumptree", "--dumpcommon"]
