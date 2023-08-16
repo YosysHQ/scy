@@ -89,7 +89,7 @@ def test_enable_stmt():
     """))
 
     assert len(task_tree) == 3
-    
+
     stmts = get_tree_list(lambda x: x.stmt, task_tree)
     assert stmts == ["cover", "enable", "cover"]
 
@@ -112,7 +112,7 @@ def test_enable_body():
 @pytest.fixture
 def tree_with_blank():
     return first_tree_from_string(dedent("""\
-        
+
         cover a
     """))
 
@@ -237,13 +237,13 @@ def multi_root_input(request):
 def multi_root_tree(multi_root_input: "dict[str,str|int]"):
     return TaskTree.from_string(multi_root_input["input_str"])
 
-def test_multi_root_len(multi_root_input: "dict[str,str|int]", 
+def test_multi_root_len(multi_root_input: "dict[str,str|int]",
                         multi_root_tree: "list[TaskTree|str]"):
     expected_len = multi_root_input["len"]
     actual_len = len(multi_root_tree)
     assert actual_len == expected_len
 
-def test_multi_root_trees(multi_root_input: "dict[str,str|int]", 
+def test_multi_root_trees(multi_root_input: "dict[str,str|int]",
                           multi_root_tree: "list[TaskTree|str]"):
     expected_trees = multi_root_input["trees"]
     actual_trees = len([x for x in multi_root_tree if isinstance(x, TaskTree)])
@@ -336,28 +336,28 @@ def test_common_tree(func_or_prop: str, expected):
 
 @pytest.fixture(params=[
     {"input_str": "cover a",
-     "tree_lines": [1], 
+     "tree_lines": [1],
      "print_lines": (1, 1)},
     {"input_str": "\ncover a",
-     "tree_lines": [2], 
+     "tree_lines": [2],
      "print_lines": (1, 1)},
     {"input_str": "cover a:\n cover b",
-     "tree_lines": [1, 2], 
+     "tree_lines": [1, 2],
      "print_lines": (1, 2)},
     {"input_str": "cover a:\n\n cover b",
-     "tree_lines": [1, 3], 
+     "tree_lines": [1, 3],
      "print_lines": (1, 2)},
     {"input_str": "cover a:\n \n cover b",
-     "tree_lines": [1, 3], 
+     "tree_lines": [1, 3],
      "print_lines": (1, 2)},
     {"input_str": "cover a:\n text\n cover b",
-     "tree_lines": [1, 3], 
+     "tree_lines": [1, 3],
      "print_lines": (2, 3)},
     {"input_str": "cover a:\n #comment\n cover b",
-     "tree_lines": [1, 3], 
+     "tree_lines": [1, 3],
      "print_lines": (2, 3)},
     {"input_str": "cover a:\n #comment1\n #comment2\n cover b",
-     "tree_lines": [1, 4], 
+     "tree_lines": [1, 4],
      "print_lines": (3, 4)},
     {"input_str": "enable cell d e f:\n body\n",
      "tree_lines": [1],

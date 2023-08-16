@@ -7,9 +7,9 @@ class SCYLexer(RegexLexer):
     name = 'Sequence of Covers'
     aliases = ['scy']
     filenames = ['*.scy']
-    
+
     keyword_re = r'(cover|append|trace|add|disable|enable)'
-    
+
     tokens = {
         'common': [
             (r'\s+', Whitespace),
@@ -22,9 +22,9 @@ class SCYLexer(RegexLexer):
             include('common'),
         ],
         'stmt': [
-            (r'(\S+)( )(.*)(:)?', 
+            (r'(\S+)( )(.*)(:)?',
                 bygroups(Name.Function, Whitespace, Text, Operator)),
-            (r'(\S+)(:?)', 
+            (r'(\S+)(:?)',
                 bygroups(Text, Operator)),
             (r'(\n)', Whitespace, '#pop'),
             include('common'),

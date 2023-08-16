@@ -58,7 +58,7 @@ class SCYOptions(ConfigOptions):
             self.sby_options += f"{option.name} {option.arguments}\n"
             self.mark_as_processed(option)
         return super().validate_options()
-    
+
     @property
     def trace_ext(self) -> str:
         return "vcd" if self.replay_vcd else "yw"

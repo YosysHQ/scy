@@ -17,7 +17,7 @@ class SCYValueError(SCYTreeError):
 class SCYUnknownCellError(SCYTreeError):
     """Exception for an encountering an unknown enable cell"""
     pass
-    
+
 class SCYMissingTraceException(SCYTreeError):
     """Exception for missing trace"""
     pass

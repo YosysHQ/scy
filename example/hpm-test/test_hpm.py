@@ -10,7 +10,7 @@ def gen_cfg(name: str):
                 # read source
                 read -sv cover.sv wrapper.sv nerv.sv
                 prep -flatten -nordff -top rvfi_testbench
-                # remove testbench init assumption 
+                # remove testbench init assumption
                 delete c:$assume$rvfi_testbench.sv*
             """).splitlines(),
             "files": dedent("""
@@ -18,7 +18,7 @@ def gen_cfg(name: str):
                 ../checks/rvfi_channel.sv
                 ../checks/rvfi_testbench.sv
                 ../checks/rvfi_cover_check.sv
-                ../nerv/wrapper.sv 
+                ../nerv/wrapper.sv
                 ../nerv/nerv.sv
                 ../cover_stmts.vh
             """).splitlines(),
@@ -47,7 +47,7 @@ def gen_cfg(name: str):
             """).splitlines()
     }
     config["options"] = [
-            "depth 10", 
+            "depth 10",
             "replay_vcd off"
     ]
     if name == "reset_only.scy":
@@ -136,4 +136,3 @@ class TestHPMClass:
                 "shortest.scy": [2, 4],
             }
             assert scy_chunks == chunks[name]
-            

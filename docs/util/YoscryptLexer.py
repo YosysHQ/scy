@@ -8,9 +8,9 @@ class YoscryptLexer(RegexLexer):
     name = 'Yosys Script'
     aliases = ['yoscrypt']
     filenames = ['*.ys']
-    
-    
-    
+
+
+
     tokens = {
         'common': [
             (r'\s+', Whitespace),
@@ -22,7 +22,7 @@ class YoscryptLexer(RegexLexer):
             (r'(\$[A-Za-z_0-9]*)', Name.Builtin),
             (r'([A-Za-z_][A-Za-z_0-9\.\\/:-]*)', Name),
             (r'(\[)(-\S*)(\])', # optional command
-             	bygroups(Operator, Name.Attribute, Operator)),
+                bygroups(Operator, Name.Attribute, Operator)),
             (r'([\[<]\w*[\]>])', Name), # arguments
             (r'[\{\}\|=\[\],]', Operator),
             (r'.', Comment),

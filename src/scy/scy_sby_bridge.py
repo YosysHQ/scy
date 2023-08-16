@@ -91,7 +91,7 @@ class SBYBridge():
             self.data.pop("options")
 
     def prep_shared(self, common_il: str):
-        shared_options = ["mode cover", 
+        shared_options = ["mode cover",
                           "expect pass",
                           "skip_prep on"]
         try:
@@ -144,7 +144,7 @@ class SBYBridge():
                 bestguess.append("may be missing vcd2fst")
             if check_error and 'selection contains 0 elements' in msg:
                 bestguess.append(f"missing cover property for {failed_task.name!r}")
-        
+
         task_loop.LogContext.scope = task_loop.LogContext.scope[0:-4]
         return SBYException(event_cmd, logfile, bestguess, typ)
 
@@ -193,7 +193,7 @@ def parse_common_sby(common_task: TaskTree, sbycfg: SBYBridge, scycfg: SCYConfig
     return (add_log, add_cells, enable_cells)
 
 def gen_sby(task: TaskTree, sbycfg: SBYBridge, scycfg: SCYConfig,
-            add_cells: "dict[int, dict[str]]", 
+            add_cells: "dict[int, dict[str]]",
             enable_cells: "dict[str, dict[str, str | bool]]"):
 
     sbycfg = copy.deepcopy(sbycfg)
@@ -205,7 +205,7 @@ def gen_sby(task: TaskTree, sbycfg: SBYBridge, scycfg: SCYConfig,
                                  "engine_0",
                                  f"trace0.{scycfg.options.trace_ext}")
         traces = [os.path.join(parent.get_dir(),
-                               "src", 
+                               "src",
                                trace.split()[0]) for trace in task.traces[:-1]]
         sbycfg.files.extend(traces + [f"{parent.tracestr}.{scycfg.options.trace_ext} {parent_trace}"])
 
@@ -234,7 +234,7 @@ def gen_sby(task: TaskTree, sbycfg: SBYBridge, scycfg: SCYConfig,
     traces_script = []
     for trace in task.traces:
         if scycfg.options.replay_vcd:
-            trace_scope = f" -scope {scycfg.options.design_scope}" 
+            trace_scope = f" -scope {scycfg.options.design_scope}"
         else:
             trace_scope = ""
         traces_script.append(f"sim -w -r {trace}{trace_scope}")

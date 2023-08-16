@@ -87,7 +87,7 @@ def base_scycfg(tmp_path: pathlib.Path):
                     end else /*(!reset && !reverse)*/ begin
                         count = count+1;
                     end
-                    
+
                     if (!reset) begin
                         cp_3: cover(count==3);
                         cp_7: cover(count==7);

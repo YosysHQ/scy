@@ -100,7 +100,7 @@ def scy_dir(tmp_path_factory: pytest.TempPathFactory, test, request: pytest.Fixt
     return test_dir
 
 @pytest.fixture(scope="class")
-def scy_cfg(scy_dir: Path, base_cfg: "dict[str, list[str]]", sequence, cover_stmts, 
+def scy_cfg(scy_dir: Path, base_cfg: "dict[str, list[str]]", sequence, cover_stmts,
             test: "dict[str, str]"):
     if "mkdir" in test:
         new_dir = scy_dir / test["mkdir"]
@@ -150,7 +150,7 @@ def cmd_args(test: "dict[str, list[str]]"):
                                  "\t\tcp_254: cover(count==254);",
                                  "\tend"],
                  "chunks": [2, 1]},
-        {"name": "force_reset", "sequence": ["cover cp_4:", 
+        {"name": "force_reset", "sequence": ["cover cp_4:",
                                              " cover cp_3",
                                              "cover cp_3"],
                  "cover_stmts": ["\tno_reverse: assume (!reverse);"
@@ -159,7 +159,7 @@ def cmd_args(test: "dict[str, list[str]]"):
                                  "\t\tcp_4: cover(count==4);",
                                  "\tend"],
                  "chunks": [4, 4, 3]},
-        {"name": "no_forced_reset", "sequence": ["cover cp_4:", 
+        {"name": "no_forced_reset", "sequence": ["cover cp_4:",
                                                  " disable no_reverse:",
                                                  "  cover cp_3",
                                                  " cover cp_3:",
@@ -290,7 +290,7 @@ class TestErrorsClass:
 class TestArgsClass:
     def test_runs(self, scy_exec: subprocess.CompletedProcess):
         scy_exec.check_returncode()
-    
+
     @pytest.mark.usefixtures("scy_exec")
     def test_files(self, test: "dict[str, str|list[str]]", output_dir: Path):
         if "--dumptree" in test["args"]:

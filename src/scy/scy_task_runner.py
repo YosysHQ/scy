@@ -48,7 +48,7 @@ def gen_traces(task: TaskTree) -> "list[str]":
             # we emulate this by telling yosys-witness to skip one extra cycle than we told sim
             append -= 1
             trace_path = os.path.join(task.get_dir(),
-                                    "src", 
+                                    "src",
                                     trace)
         traces.append(f"{trace_path} -p {append}")
 
@@ -73,7 +73,7 @@ def dump_trace(task: TaskTree, workdir: Path):
     yw_proc.events(tl.process.StderrEvent).handle(on_proc_err)
     common_il = SCYRunnerContext.sbycfg.files[0].split()[-1]
     yosys_args = [
-        "yosys", "-p", 
+        "yosys", "-p",
         f"read_rtlil {common_il}; sim -hdlname -r {task.name}.yw -vcd {task.name}.vcd"
     ]
     yosys_proc = tl.Process(yosys_args, cwd=workdir)
@@ -144,7 +144,7 @@ def load_design():
     with open(design_json, 'r') as f:
         design = json.load(f)
 
-    assert len(design["modules"]) == 1, ("expected one top level module, " 
+    assert len(design["modules"]) == 1, ("expected one top level module, "
                                         "try setting the 'design_scope' option")
     SCYRunnerContext.scycfg.options.design_scope = design["modules"][0]["name"]
 
@@ -294,7 +294,7 @@ def run_task():
 
     # add traces to children
     task.update_children_traces(task_trace)
-    task.update_children_enable_cells(recurse=False)            
+    task.update_children_enable_cells(recurse=False)
 
     if SCYTaskContext.recurse:
         run_children(task.children, root_task)

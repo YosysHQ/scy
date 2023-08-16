@@ -90,7 +90,7 @@ class TaskTree:
         child.depth = self.depth
         child.reduce_depth(-1)
         return self
-    
+
     def add_enable_cell(self, name: str, cell: "dict[str, str]"):
         self.enable_cells[name] = cell
 
@@ -122,15 +122,15 @@ class TaskTree:
     @property
     def is_root(self) -> bool:
         return self.parent is None
-    
+
     @property
     def is_leaf(self) -> bool:
         return not self.children
-    
+
     @property
     def is_common(self) -> bool:
         return self.stmt == "common"
-    
+
     @property
     def uses_sby(self) -> bool:
         return self.stmt in ["cover", "common"]
@@ -142,11 +142,11 @@ class TaskTree:
     @property
     def is_runnable(self) -> bool:
         return self.stmt in ["cover", "trace"]
-    
+
     @property
     def has_local_enable_cells(self) -> bool:
         return "enable" in self.body or "disable" in self.body
-    
+
     @property
     def tracestr(self) -> str:
         if self.is_common:
@@ -155,18 +155,18 @@ class TaskTree:
             return f"trace{self.line:03d}"
         else:
             return self.parent.tracestr
-    
+
     @property
     def linestr(self) -> str:
         return f"L{self.line:03d}_{0 if self.is_root else self.parent.line:03d}"
-    
+
     def get_all_linestr(self) -> "list[str]":
         linestr = [f"L{self.line:03d}"]
         if self.is_root:
             return linestr
         else:
             return linestr + self.parent.get_all_linestr()
-    
+
     @property
     def dir(self) -> str:
         if self.is_common:
@@ -185,7 +185,7 @@ class TaskTree:
             return {"lhs": self.asgmt}
         else:
             return None
-    
+
     @property
     def start_cycle(self) -> int:
         if self.is_root:
@@ -197,7 +197,7 @@ class TaskTree:
     def stop_cycle(self) -> int:
         start = self.start_cycle
         return start + self.steps
-    
+
     def reduce_depth(self, amount: int = 1):
         self.depth = max(0, self.depth - amount)
         for child in self.children:
@@ -225,7 +225,7 @@ class TaskTree:
 
     def __str__(self):
         return self.as_str(True)
-    
+
     def __len__(self):
         length = 1
         for child in self.children:
