@@ -10,7 +10,7 @@ narrow the search space to certain traces.
 
 ## Note on installation
 
-Currently requires [YosysHQ/sby at krys/scy_dev](https://github.com/yosyshq/sby/tree/krys/scy_dev>).
+Currently requires [YosysHQ/yosys at krys/yw_join](https://github.com/YosysHQ/yosys/tree/krys/yw_join).
 
 ## Example SCY Project
 
