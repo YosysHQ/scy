@@ -10,5 +10,5 @@ narrow the search space to certain traces.
 
 ## Note on installation
 
-Requires Yosys with PR #3903.
+Requires YosysHQ/Yosys#3903.
 
