@@ -197,7 +197,7 @@ def main():
     scy_task = SCYTask(args)
     try:
         tl.run_task_loop(scy_task.run)
-    except BaseException as e:
+    except Exception as e:
         if args.throw_err:
             import traceback
             traceback.print_exc()

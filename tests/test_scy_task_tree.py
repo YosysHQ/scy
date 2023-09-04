@@ -167,7 +167,7 @@ def mixed_spacing_tree(mixed_spacing_input):
 
 def test_mixed_spacing(mixed_spacing_input, mixed_spacing_tree):
     expected = mixed_spacing_input["expected_lens"]
-    actual = get_tree_list(lambda x: len(x), mixed_spacing_tree[0])
+    actual = get_tree_list(len, mixed_spacing_tree[0])
     assert actual == expected
 
 @pytest.fixture
@@ -301,17 +301,17 @@ def test_statement_properties(input_str, prop, expected, child):
 @pytest.mark.parametrize([
      "input_str",           "func",         "expected",     "child"
     ], [
-    ("cover a:\n trace b",  "get_dir()",    "L001_000_a",   False),
-    ("cover a:\n trace b",  "get_dir()",    "L001_000_a",   True),
-    ("cover a",             "get_asgmt()",  None,           False),
+    ("cover a:\n trace b",  "get_dir",    "L001_000_a",   False),
+    ("cover a:\n trace b",  "get_dir",    "L001_000_a",   True),
+    ("cover a",             "get_asgmt",  None,           False),
     ("enable cell d e f:\n body\n",
-                            "get_asgmt()",  {"lhs": "d e f"},False),
+                            "get_asgmt",  {"lhs": "d e f"},False),
 ])
 def test_statement_callable(input_str, func, expected, child):
     task_tree = first_tree_from_string(input_str)
     if child:
         task_tree = task_tree.children[0]
-    actual = eval(f"task_tree.{func}")
+    actual = getattr(task_tree, func)()
     assert actual == expected
 
 @pytest.mark.parametrize([

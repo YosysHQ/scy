@@ -2,7 +2,6 @@ from contextlib import nullcontext as does_not_raise
 import pathlib
 import pytest
 from textwrap import dedent
-from typing import Any
 
 from scy.scy_config_parser import SCYConfig, SCY_arg_parser
 from scy.scy_exceptions import (
@@ -185,6 +184,7 @@ def test_run_task_nomode(scytr_upcnt: TaskRunner):
     try:
         scytr_upcnt.sbycfg.options.remove("mode cover")
     except ValueError:
+        # nothing to remove
         pass
     root_task = scytr_upcnt.scycfg.sequence[0]
     if scytr_upcnt.scycfg.args.setupmode:

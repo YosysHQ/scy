@@ -153,7 +153,7 @@ def cmd_args(test: "dict[str, list[str]]"):
         {"name": "force_reset", "sequence": ["cover cp_4:",
                                              " cover cp_3",
                                              "cover cp_3"],
-                 "cover_stmts": ["\tno_reverse: assume (!reverse);"
+                 "cover_stmts": ["\tno_reverse: assume (!reverse);",
                                  "\tif (!reset) begin",
                                  "\t\tcp_3: cover(count==3);",
                                  "\t\tcp_4: cover(count==4);",
@@ -165,7 +165,7 @@ def cmd_args(test: "dict[str, list[str]]"):
                                                  " cover cp_3:",
                                                  "  disable no_reverse",
                                                  "cover cp_3"],
-                 "cover_stmts": ["\tno_reverse: assume (!reverse);"
+                 "cover_stmts": ["\tno_reverse: assume (!reverse);",
                                  "\tif (!reset) begin",
                                  "\t\tcp_3: cover(count==3);",
                                  "\t\tcp_4: cover(count==4);",
@@ -405,7 +405,7 @@ class TestSBYGenClass:
             for setattr in sby_setattrs:
                 if "%ci:+[EN]" not in setattr: # add cell
                     continue
-                name = name = re.search(r" c:(\S*) ", setattr).group(1)
+                name = re.search(r" c:(\S*) ", setattr).group(1)
                 if name in cell:
                     found = True
                     break

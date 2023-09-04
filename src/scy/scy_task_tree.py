@@ -98,7 +98,7 @@ class TaskTree:
         try:
             self.enable_cells[name].update(cell)
         except KeyError:
-            return self.add_enable_cell(name, cell)
+            self.add_enable_cell(name, cell)
 
     def update_enable_cells_from_parent(self, recurse=False):
         for k, v in self.parent.enable_cells.items():

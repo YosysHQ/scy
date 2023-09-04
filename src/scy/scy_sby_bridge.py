@@ -116,12 +116,12 @@ class SBYBridge():
 
         if return_code == 2:
             typ = "FAIL"
-        elif return_code == 4:
-            typ = "UNKNOWN"
         elif return_code == 8:
             typ = "TIMEOUT"
         elif return_code == 16:
             typ = "ERROR"
+        else:
+            typ = "UNKNOWN"
 
         # open log file
         with open(logfile, "r") as f:
