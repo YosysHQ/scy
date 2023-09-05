@@ -1,0 +1,19 @@
+[options]
+depth 200
+multiclock on
+
+[design]
+read -sv picosoc.v picorv32.v simpleuart.v spimemio.v props.sv
+prep -top picosoc
+
+[sequence]
+cover char_01:
+  cover char_02:
+    trace hello
+
+[files]
+picosoc.v
+picorv32.v
+simpleuart.v
+spimemio.v
+props.sv
