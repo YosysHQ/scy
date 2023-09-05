@@ -145,6 +145,7 @@ class SCYTask():
         tree_task = tl.Task(on_run=run_tree)
         tree_task.depends_on(prep_task)
         tree_task.depends_on(dir_task)
+        tree_task[SCYTaskContext].task = None
 
         # setupmode skip
         if self.args.setupmode or self.args.dump_common:
