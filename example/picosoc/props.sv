@@ -5,9 +5,17 @@ module props (
 );
 	localparam clkdiv = 3;
 
+	reg clk_ref = 0;
+	(* gclk *) wire gclk;
+	always @(posedge gclk) clk_ref <= !clk_ref;
+	always @* assume (clk == clk_ref);
+
+	reg reset_cnt = 5;
+	always @(posedge clk) reset_cnt <= reset_cnt - |reset_cnt;
+	always @* assume (resetn == !reset_cnt);
+
 	reg [7:0] ser_byte = 0;
 	reg ser_byte_valid = 0;
-	reg force_reset = 1;
 
 	reg [2:0] state = 0;
 	reg [7:0] bytecnt = 0;
@@ -46,12 +54,10 @@ module props (
 			state <= 0;
 			bytecnt <= 0;
 			ser_byte_valid <= 0;
-			force_reset = 0;
 		end
 	end
 
 	always @* begin
-		if (force_reset) assume (!resetn);
 		char_01: cover (resetn && bytecnt ==  1 && ser_byte_valid && ser_byte == "H");
 		char_02: cover (resetn && bytecnt ==  2 && ser_byte_valid && ser_byte == "e");
 		char_03: cover (resetn && bytecnt ==  3 && ser_byte_valid && ser_byte == "l");
