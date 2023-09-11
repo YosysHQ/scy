@@ -9,7 +9,7 @@ docs-%:
 	$(MAKE) -C docs $*
 
 test: check-scy
-	$(PYTHON) -m pytest -n auto
+	$(PYTHON) -m pytest -n auto -rs
 
 test-cov: check-scy
 	$(PYTHON) -m pytest -n auto \

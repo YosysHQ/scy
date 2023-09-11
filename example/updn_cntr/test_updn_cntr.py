@@ -219,7 +219,7 @@ class TestComplexClass:
         if "chunks" in test:
             assert len(scy_chunks) == len(test["chunks"])
             if scy_chunks != test["chunks"]:
-                pytest.skip(f"expected {test['chunks']} chunks, got {scy_chunks}")
+                pytest.skip(f"for {test['name']}; expected {test['chunks']} chunks, got {scy_chunks}")
 
 @pytest.mark.parametrize("test", [
         {"name":  "trace_root", "sequence": ["trace now:", "cover cp_4:"],

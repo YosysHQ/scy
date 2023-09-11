@@ -136,4 +136,4 @@ class TestHPMClass:
             }
             assert len(scy_chunks) == len(chunks[name])
             if scy_chunks != chunks[name]:
-                pytest.skip(f"expected {chunks[name]} chunks, got {scy_chunks}")
+                pytest.skip(f"for {name}; expected {chunks[name]} chunks, got {scy_chunks}")
