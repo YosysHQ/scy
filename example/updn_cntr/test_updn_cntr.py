@@ -4,6 +4,7 @@ import re
 import shutil
 import subprocess
 from pathlib import Path
+from typing import Any
 
 import pytest
 from scy.scy_task_tree import TaskTree
@@ -267,7 +268,7 @@ class TestComplexClass:
                 output_files.remove("__final.vcd")
             assert not output_files, f"unmatched files {output_files}"
 
-    def test_chunks(self, test: dict[str], scy_chunks: list[int]):
+    def test_chunks(self, test: dict[str, Any], scy_chunks: list[int]):
         if "chunks" in test:
             assert len(scy_chunks) == len(test["chunks"])
             if scy_chunks != test["chunks"]:

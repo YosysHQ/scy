@@ -4,7 +4,7 @@ import json
 import os
 import re
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 import yosys_mau.task_loop as tl
 from yosys_mau.task_loop import (
@@ -121,7 +121,7 @@ async def on_proc_exit(event: tl.process.ExitEvent):
 class SCYRunnerContext:
     sbycfg: SBYBridge
     scycfg: SCYConfig
-    add_cells: dict[int, dict[str]]
+    add_cells: dict[int, dict[str, Any]]
     enable_cells: dict[str, dict[str, str | bool]]
     task_steps: dict[str, int]
 

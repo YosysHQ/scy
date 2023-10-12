@@ -4,6 +4,7 @@ import copy
 import os
 import re
 from pathlib import Path
+from typing import Any
 
 from yosys_mau import task_loop
 
@@ -162,7 +163,7 @@ def parse_common_sby(common_task: TaskTree, sbycfg: SBYBridge, scycfg: SCYConfig
     assert common_task.is_common, "expected tree root to be common.sby generation"
 
     # preparse tree to extract cell generation
-    add_cells: dict[int, dict[str]] = {}
+    add_cells: dict[int, dict[str, Any]] = {}
     enable_cells: dict[str, dict[str, str | bool]] = {}
 
     def add_enable_cell(hdlname: str, stmt: str):
@@ -212,7 +213,7 @@ def gen_sby(
     task: TaskTree,
     sbycfg: SBYBridge,
     scycfg: SCYConfig,
-    add_cells: dict[int, dict[str]],
+    add_cells: dict[int, dict[str, Any]],
     enable_cells: dict[str, dict[str, str | bool]],
 ):
     sbycfg = copy.deepcopy(sbycfg)
