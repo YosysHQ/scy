@@ -7,6 +7,7 @@ from scy.scy_exceptions import SCYSubProcessException
 from scy.scy_task_tree import TaskTree
 from yosys_mau import task_loop
 
+
 class SBYException(SCYSubProcessException):
     def __init__(self, command: str, logfile=None, bestguess=None, typ: str = "UNKNOWN") -> None:
         super().__init__(command, logfile, bestguess)
@@ -16,6 +17,7 @@ class SBYException(SCYSubProcessException):
     def msg(self) -> str:
         return f"returned {self.typ}"
 
+
 def from_scycfg(scycfg: SCYConfig):
     sbycfg = SBYBridge()
     sbycfg.add_section("options", scycfg.options.sby_options)
@@ -24,14 +26,16 @@ def from_scycfg(scycfg: SCYConfig):
 
     for sect in scycfg.fallback:
         name = sect.name
-        if sect.arguments: name += f" {sect.arguments}"
+        if sect.arguments:
+            name += f" {sect.arguments}"
         sbycfg.add_section(name, sect.contents)
     return sbycfg
 
-class SBYBridge():
+
+class SBYBridge:
     def __init__(self, data: "dict[str, list[str]]" = {}):
         self.data = {}
-        for (name, contents) in data.items():
+        for name, contents in data.items():
             self.add_section(name, contents)
 
     def add_section(self, name: str, contents: "str | list[str]"):
@@ -73,7 +77,7 @@ class SBYBridge():
                     self.files[i] = os.path.join(dir_prepend, s)
 
     def dump(self, sbyfile, skip_sections: "list[str]" = []):
-        for (name, body) in self.data.items():
+        for name, body in self.data.items():
             if name in skip_sections:
                 continue
             print(f"[{name}]", file=sbyfile)
@@ -91,9 +95,7 @@ class SBYBridge():
             self.data.pop("options")
 
     def prep_shared(self, common_il: str):
-        shared_options = ["mode cover",
-                          "expect pass",
-                          "skip_prep on"]
+        shared_options = ["mode cover", "expect pass", "skip_prep on"]
         try:
             self.options.extend(shared_options)
         except AttributeError:
@@ -104,13 +106,14 @@ class SBYBridge():
             if "file " in key:
                 self.data.pop(key)
 
-    def handle_error(self, event_task: task_loop.Process,
-                     check_error: bool, failed_task: TaskTree) -> "Exception | None":
+    def handle_error(
+        self, event_task: task_loop.Process, check_error: bool, failed_task: TaskTree
+    ) -> "Exception | None":
         task_loop.LogContext.scope += " SBY"
         event_cmd = " ".join(event_task.command)
         input_file = Path(event_task.command[-1])
         event_dir = Path(event_task.cwd)
-        logfile: Path = (event_dir / input_file.stem / 'logfile.txt')
+        logfile: Path = event_dir / input_file.stem / "logfile.txt"
         return_code = event_task.returncode
         bestguess = []
 
@@ -132,17 +135,17 @@ class SBYBridge():
         summary: "list[str]" = re.findall(regex, log, flags=re.MULTILINE)
         for msg in summary:
             task_loop.log_warning(msg)
-            if check_error and 'unreached cover statements' in msg:
+            if check_error and "unreached cover statements" in msg:
                 bestguess.append(f"unreached cover statement for {failed_task.name!r}")
 
         # check reported error
         regex = r"(ERROR): (.*)"
         problems: "list[tuple[str, str]]" = re.findall(regex, log, flags=re.MULTILINE)
         for _, msg in problems:
-            task_loop.log_error(msg, raise_error = False)
-            if check_error and 'Shell command failed!' in msg:
+            task_loop.log_error(msg, raise_error=False)
+            if check_error and "Shell command failed!" in msg:
                 bestguess.append("may be missing vcd2fst")
-            if check_error and 'selection contains 0 elements' in msg:
+            if check_error and "selection contains 0 elements" in msg:
                 bestguess.append(f"missing cover property for {failed_task.name!r}")
 
         task_loop.LogContext.scope = task_loop.LogContext.scope[0:-4]
@@ -150,12 +153,14 @@ class SBYBridge():
 
     from_scycfg = staticmethod(from_scycfg)
 
+
 def parse_common_sby(common_task: TaskTree, sbycfg: SBYBridge, scycfg: SCYConfig):
     assert common_task.is_common, "expected tree root to be common.sby generation"
 
     # preparse tree to extract cell generation
     add_cells: "dict[int, dict[str]]" = {}
     enable_cells: "dict[str, dict[str, str | bool]]" = {}
+
     def add_enable_cell(hdlname: str, stmt: str):
         enable_cells.setdefault(hdlname, {"disable": "1'b0"})
         enable_cells[hdlname][f"does_{stmt}"] = True
@@ -169,7 +174,7 @@ def parse_common_sby(common_task: TaskTree, sbycfg: SBYBridge, scycfg: SCYConfig
         elif task.stmt in ["enable", "disable"]:
             add_enable_cell(task.name, task.stmt)
         elif task.body:
-            for line in task.body.split('\n'):
+            for line in task.body.split("\n"):
                 try:
                     stmt, hdlname = line.split()
                 except ValueError:
@@ -179,12 +184,18 @@ def parse_common_sby(common_task: TaskTree, sbycfg: SBYBridge, scycfg: SCYConfig
 
     # add cells to sby script
     add_log = None
-    for (line, cell) in add_cells.items():
-        sbycfg.script.extend([f"add -{cell['type']} {cell['lhs']} # line {line}",
-                            f"setattr -set scy_line {line}  w:{cell['lhs']} %co c:$auto$add* %i"])
+    for line, cell in add_cells.items():
+        sbycfg.script.extend(
+            [
+                f"add -{cell['type']} {cell['lhs']} # line {line}",
+                f"setattr -set scy_line {line}  w:{cell['lhs']} %co c:$auto$add* %i",
+            ]
+        )
     for hdlname in enable_cells.keys():
         select = f"c:{hdlname} %ci:+[EN] c:{hdlname} %d"
-        sbycfg.script.append(f"setattr -set scy_line 0 -set hdlname:{hdlname} 1 -set keep 1 {select}")
+        sbycfg.script.append(
+            f"setattr -set scy_line 0 -set hdlname:{hdlname} 1 -set keep 1 {select}"
+        )
     if add_cells or enable_cells:
         add_log = "add_cells.log"
         sbycfg.script.append(f"tee -o {add_log} printattrs a:scy_line")
@@ -192,33 +203,39 @@ def parse_common_sby(common_task: TaskTree, sbycfg: SBYBridge, scycfg: SCYConfig
 
     return (add_log, add_cells, enable_cells)
 
-def gen_sby(task: TaskTree, sbycfg: SBYBridge, scycfg: SCYConfig,
-            add_cells: "dict[int, dict[str]]",
-            enable_cells: "dict[str, dict[str, str | bool]]"):
 
+def gen_sby(
+    task: TaskTree,
+    sbycfg: SBYBridge,
+    scycfg: SCYConfig,
+    add_cells: "dict[int, dict[str]]",
+    enable_cells: "dict[str, dict[str, str | bool]]",
+):
     sbycfg = copy.deepcopy(sbycfg)
 
     if not task.is_root and not task.parent.is_common:
         # child nodes depend on parent
         parent = task.parent
-        parent_trace = os.path.join(parent.get_dir(),
-                                 "engine_0",
-                                 f"trace0.{scycfg.options.trace_ext}")
-        traces = [os.path.join(parent.get_dir(),
-                               "src",
-                               trace.split()[0]) for trace in task.traces[:-1]]
-        sbycfg.files.extend(traces + [f"{parent.tracestr}.{scycfg.options.trace_ext} {parent_trace}"])
+        parent_trace = os.path.join(
+            parent.get_dir(), "engine_0", f"trace0.{scycfg.options.trace_ext}"
+        )
+        traces = [
+            os.path.join(parent.get_dir(), "src", trace.split()[0]) for trace in task.traces[:-1]
+        ]
+        sbycfg.files.extend(
+            traces + [f"{parent.tracestr}.{scycfg.options.trace_ext} {parent_trace}"]
+        )
 
     # configure additional cells
     pre_sim_commands = []
     post_sim_commands = []
     for cell in add_cells.values():
-        en_sig = '1' if cell["cell"] in task.enable_cells else '0'
+        en_sig = "1" if cell["cell"] in task.enable_cells else "0"
         pre_sim_commands.append(f"connect -port {cell['cell']} \\EN 1'b{en_sig}")
     for hdlname in enable_cells.keys():
         task_cell = task.enable_cells.get(hdlname, None)
         if task.has_local_enable_cells:
-            for line in task.body.split('\n'):
+            for line in task.body.split("\n"):
                 if hdlname in line:
                     task_cell = enable_cells[hdlname].copy()
                     task_cell["status"] = line.split()[0]

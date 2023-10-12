@@ -2,6 +2,7 @@ import pytest
 import subprocess
 import re
 
+
 # Not sure how to solve this without requiring scy to be installed
 @pytest.fixture(scope="class")
 def scy_args(scy_cfg, cmd_args):
@@ -10,9 +11,11 @@ def scy_args(scy_cfg, cmd_args):
     args.append(scy_cfg)
     return args
 
+
 @pytest.fixture(scope="class")
 def scy_exec(scy_dir, scy_args) -> subprocess.CompletedProcess:
     return subprocess.run(scy_args, cwd=scy_dir, capture_output=True)
+
 
 @pytest.fixture(scope="class")
 def scy_chunks(scy_exec: subprocess.CompletedProcess):

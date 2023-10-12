@@ -6,27 +6,17 @@ from pathlib import Path
 import shutil
 from scy.scy_config_parser import SCYConfig, SCY_arg_parser
 from scy.scy_sby_bridge import SBYBridge, SBYException
-from scy.scy_task_runner import (
-    SCYRunnerContext,
-    SCYTaskContext,
-    dump_trace,
-    run_tree
-)
+from scy.scy_task_runner import SCYRunnerContext, SCYTaskContext, dump_trace, run_tree
 from scy.scy_task_tree import TaskTree
 from yosys_mau import source_str
 import yosys_mau.task_loop as tl
-from yosys_mau.task_loop import (
-    LogContext,
-    log,
-    log_warning,
-    log_exception,
-    logging
-)
+from yosys_mau.task_loop import LogContext, log, log_warning, log_exception, logging
 import yosys_mau.task_loop.job_server as job
 
 LogContext.app_name = "SCY"
 
-class SCYTask():
+
+class SCYTask:
     def __init__(self, args: "argparse.Namespace | None" = None):
         self.args = args
         self.localdir = False
@@ -52,7 +42,10 @@ class SCYTask():
                 shutil.rmtree(self.args.workdir, ignore_errors=True)
                 os.makedirs(self.args.workdir)
             else:
-                raise RuntimeError(f"directory '{self.args.workdir}' already exists, use -f to overwrite the existing directory.",)
+                raise RuntimeError(
+                    f"directory '{self.args.workdir}' already exists, "
+                    "use -f to overwrite the existing directory.",
+                )
 
     def prep_sby(self):
         sbycfg = SBYBridge.from_scycfg(SCYRunnerContext.scycfg)
@@ -66,7 +59,9 @@ class SCYTask():
             SCYRunnerContext.task_steps = {}
 
         # add common sby generation task
-        SCYRunnerContext.scycfg.root = TaskTree.make_common(children=SCYRunnerContext.scycfg.sequence)
+        SCYRunnerContext.scycfg.root = TaskTree.make_common(
+            children=SCYRunnerContext.scycfg.sequence
+        )
 
     def display_stats(self):
         trace_tasks: "list[TaskTree]" = []
@@ -86,7 +81,7 @@ class SCYTask():
             else:
                 steps_str = " 0"
                 cycles_str = "ABORTED "
-            chunk_str = " "*task.depth + f"L{task.line}"
+            chunk_str = " " * task.depth + f"L{task.line}"
             task_str = task.name if task.is_runnable else f"{task.stmt} {task.name}"
             log(f"  {chunk_str:6}  {cycles_str}  =>  {steps_str}  {task_str}")
 
@@ -114,7 +109,7 @@ class SCYTask():
 
     async def run(self):
         if self.args.workdir is None:
-            self.args.workdir = self.args.scyfile.split('.')[0]
+            self.args.workdir = self.args.scyfile.split(".")[0]
             self.localdir = True
 
         # setup logging
@@ -169,13 +164,16 @@ class SCYTask():
                 # add trace to recovered task
                 tl.LogContext.scope = "final trace"
                 final_task = self.failed_tree.parent
-                tl.log_warning(f"dumping trace from last successful task {final_task.linestr!r} to '__final.vcd'")
+                tl.log_warning(
+                    "dumping trace from last successful task "
+                    f"{final_task.linestr!r} to '__final.vcd'"
+                )
                 final_task.add_child(final_trace)
             else:
                 # add trace to final task
                 scycfg = SCYRunnerContext.scycfg
                 common_task = scycfg.root
-                all_tasks = list(common_task.traverse(include_self = True))
+                all_tasks = list(common_task.traverse(include_self=True))
                 all_tasks.reverse()
                 for task in all_tasks:
                     if task.stmt != "cover":
@@ -186,10 +184,11 @@ class SCYTask():
             final_trace_task = dump_trace(final_trace, SCYRunnerContext.scycfg.args.workdir)
             display_task.depends_on(final_trace_task)
 
+
 def main():
     # read args
     parser = SCY_arg_parser()
-    args=parser.parse_args()
+    args = parser.parse_args()
 
     # setup
     job.global_client(args.jobcount)
@@ -201,11 +200,13 @@ def main():
     except Exception as e:
         if args.throw_err:
             import traceback
+
             traceback.print_exc()
         else:
             log_warning("run with -E to print full stacktrace")
         log_exception(e, raise_error=False)
         exit(1)
+
 
 if __name__ == "__main__":
     main()

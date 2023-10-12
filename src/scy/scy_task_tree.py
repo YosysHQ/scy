@@ -1,9 +1,7 @@
 from typing import Iterable
 from yosys_mau import source_str
-from yosys_mau.source_str import (
-    re,
-    SourceStr
-)
+from yosys_mau.source_str import re, SourceStr
+
 
 def from_string(string: "SourceStr | str", L0: int = 0, depth: int = 0):
     if not isinstance(string, SourceStr):
@@ -12,44 +10,64 @@ def from_string(string: "SourceStr | str", L0: int = 0, depth: int = 0):
     tree_list: "list[TaskTree | str] | TaskTree" = []
     for tree in re.finditer(nest_regex, string, flags=re.MULTILINE):
         tree_str = tree.group()
-        stmt_regex = r"^(?P<ws>\s*)(?P<stmt>cover|append|trace|add|disable|enable) "\
-                    r"(?P<name>\S+?)( (?P<asgmt>.*?)|)(:\n(?P<body>.*)|:?\n|:?$)"
+        stmt_regex = (
+            r"^(?P<ws>\s*)(?P<stmt>cover|append|trace|add|disable|enable) "
+            r"(?P<name>\S+?)( (?P<asgmt>.*?)|)(:\n(?P<body>.*)|:?\n|:?$)"
+        )
         m = re.search(stmt_regex, tree_str, flags=re.DOTALL)
-        if not m: # no statement
+        if not m:  # no statement
             tree_list.append(tree_str)
             continue
 
         d = m.groupdict()
         # check for standalone body statements
-        if d['stmt'] in ["enable", "disable"] and not d['body']:
+        if d["stmt"] in ["enable", "disable"] and not d["body"]:
             tree_list.append(tree_str)
             continue
 
         # if we're dealing with a source_str we can get the source line directly from it
-        source_map = source_str.source_map(d['stmt'])
+        source_map = source_str.source_map(d["stmt"])
         span = source_map.spans[0]
         start_line, _ = span.file.text_position(span.file_start)
         line = start_line
 
         # otherwise continue recursively
-        root = TaskTree(name=d['name'], stmt=d['stmt'], line=line, depth=depth,
-                        asgmt=d.get('asgmt', None), full_line=tree_str.splitlines()[0])
+        root = TaskTree(
+            name=d["name"],
+            stmt=d["stmt"],
+            line=line,
+            depth=depth,
+            asgmt=d.get("asgmt", None),
+            full_line=tree_str.splitlines()[0],
+        )
 
-        if d['body']:
-            root.add_children(from_string(d['body']))
+        if d["body"]:
+            root.add_children(from_string(d["body"]))
 
         tree_list.append(root)
 
     return tree_list
 
-def make_common(children: "list[TaskTree|str]"=None):
+
+def make_common(children: "list[TaskTree|str]" = None):
     return TaskTree("", "common", 0, children=children)
 
+
 class TaskTree:
-    def __init__(self, name: str, stmt: str, line: int, steps: int = 0, depth: int = 0,
-                 parent: "TaskTree" = None, children: "list[TaskTree|str]" = None,
-                 body: str = "", asgmt: str = None, full_line: SourceStr = None,
-                 enable_cells: "dict[str, dict[str, str]]" = None):
+    def __init__(
+        self,
+        name: str,
+        stmt: str,
+        line: int,
+        steps: int = 0,
+        depth: int = 0,
+        parent: "TaskTree" = None,
+        children: "list[TaskTree|str]" = None,
+        body: str = "",
+        asgmt: str = None,
+        full_line: SourceStr = None,
+        enable_cells: "dict[str, dict[str, str]]" = None,
+    ):
         self.name = name
         self.stmt = stmt
         self.line = line
@@ -84,7 +102,9 @@ class TaskTree:
 
     def add_child(self, child: "TaskTree"):
         if child.parent:
-            raise NotImplementedError("reassigning child's parent without unassigning other parent's child")
+            raise NotImplementedError(
+                "reassigning child's parent without unassigning other parent's child"
+            )
         child.parent = self
         self.children.append(child)
         child.depth = self.depth
@@ -203,7 +223,7 @@ class TaskTree:
         for child in self.children:
             child.reduce_depth(amount)
 
-    def traverse(self, include_self = True) -> Iterable["TaskTree"]:
+    def traverse(self, include_self=True) -> Iterable["TaskTree"]:
         if include_self:
             yield self
         for child in self.children:
@@ -215,12 +235,12 @@ class TaskTree:
         if self.asgmt:
             strings[0] += f" ({self.asgmt})"
         if self.body:
-            for string in self.body.split('\n'):
+            for string in self.body.split("\n"):
                 if string:
                     strings.append(string)
         if recurse:
             for child in self.children:
-                strings += child.as_str(recurse).split('\n')
+                strings += child.as_str(recurse).split("\n")
         return "\n ".join(strings)
 
     def __str__(self):

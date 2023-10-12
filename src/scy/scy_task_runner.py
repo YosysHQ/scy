@@ -16,7 +16,7 @@ from scy.scy_exceptions import (
     SCYTreeError,
     SCYUnknownCellError,
     SCYUnknownStatementError,
-    SCYValueError
+    SCYValueError,
 )
 
 import yosys_mau.task_loop as tl
@@ -25,6 +25,7 @@ from yosys_mau.task_loop import (
     log,
     log_exception,
 )
+
 
 def gen_traces(task: TaskTree) -> "list[str]":
     # reversing trace order means that the most recent trace will be first
@@ -40,22 +41,20 @@ def gen_traces(task: TaskTree) -> "list[str]":
             append = 0
         if last_trace:
             last_trace = False
-            trace_path = os.path.join(task.get_dir(),
-                                    "engine_0",
-                                    "trace0.yw")
+            trace_path = os.path.join(task.get_dir(), "engine_0", "trace0.yw")
         else:
-            # using sim -w appears to combine the final step of one trace with the first step of the next
-            # we emulate this by telling yosys-witness to skip one extra cycle than we told sim
+            # using sim -w appears to combine the final step of one trace with the first
+            # step of the next we emulate this by telling yosys-witness to skip one
+            # extra cycle than we told sim
             append -= 1
-            trace_path = os.path.join(task.get_dir(),
-                                    "src",
-                                    trace)
+            trace_path = os.path.join(task.get_dir(), "src", trace)
         traces.append(f"{trace_path} -p {append}")
 
     # we now need to flip the order back to the expected order
     task.traces.reverse()
     traces.reverse()
     return traces
+
 
 def dump_trace(task: TaskTree, workdir: Path):
     # prepare yosys
@@ -73,8 +72,9 @@ def dump_trace(task: TaskTree, workdir: Path):
     yw_proc.events(tl.process.StderrEvent).handle(on_proc_err)
     common_il = SCYRunnerContext.sbycfg.files[0].split()[-1]
     yosys_args = [
-        "yosys", "-p",
-        f"read_rtlil {common_il}; sim -hdlname -r {task.name}.yw -vcd {task.name}.vcd"
+        "yosys",
+        "-p",
+        f"read_rtlil {common_il}; sim -hdlname -r {task.name}.yw -vcd {task.name}.vcd",
     ]
     yosys_proc = tl.Process(yosys_args, cwd=workdir)
     yosys_proc.depends_on(yw_proc)
@@ -82,8 +82,10 @@ def dump_trace(task: TaskTree, workdir: Path):
     yosys_proc.events(tl.process.StderrEvent).handle(on_proc_err)
     return yosys_proc
 
+
 def on_proc_err(event: tl.process.StderrEvent):
     tl.log_warning(event.output)
+
 
 async def on_proc_exit(event: tl.process.ExitEvent):
     if event.returncode != 0:
@@ -94,7 +96,9 @@ async def on_proc_exit(event: tl.process.ExitEvent):
         # run bridge error handler
         if "sby" in exe_name:
             err = SCYRunnerContext.sbycfg.handle_error(
-                event_task, SCYRunnerContext.scycfg.args.check_error, SCYTaskContext.task
+                event_task,
+                SCYRunnerContext.scycfg.args.check_error,
+                SCYTaskContext.task,
             )
         else:
             # generic error handler
@@ -110,6 +114,7 @@ async def on_proc_exit(event: tl.process.ExitEvent):
             err = SCYSubProcessException(event_cmd, None, bestguess)
         tl.log_exception(err)
 
+
 @tl.task_context
 class SCYRunnerContext:
     sbycfg: SBYBridge
@@ -118,10 +123,12 @@ class SCYRunnerContext:
     enable_cells: "dict[str, dict[str, str | bool]]"
     task_steps: "dict[str, int]"
 
+
 @tl.task_context
 class SCYTaskContext:
     task: TaskTree
     recurse: bool
+
 
 async def handle_cover_output(lines):
     steps_regex = r"^.*\[(?P<task>.*)\].*(?:reached).*step (?P<step>\d+)$"
@@ -129,7 +136,8 @@ async def handle_cover_output(lines):
         step_match = re.match(steps_regex, line_event.output)
         if step_match:
             task_steps = SCYRunnerContext.task_steps
-            task_steps[step_match['task']] = int(step_match['step'])
+            task_steps[step_match["task"]] = int(step_match["step"])
+
 
 def run_children(children: "list[TaskTree]", blocker: "tl.Task"):
     for child in children:
@@ -138,15 +146,18 @@ def run_children(children: "list[TaskTree]", blocker: "tl.Task"):
         if blocker:
             child_task.depends_on(blocker)
 
+
 def load_design():
     workdir = Path(SCYRunnerContext.scycfg.args.workdir)
     design_json = workdir / "common" / "model" / "design.json"
-    with open(design_json, 'r') as f:
+    with open(design_json, "r") as f:
         design = json.load(f)
 
-    assert len(design["modules"]) == 1, ("expected one top level module, "
-                                        "try setting the 'design_scope' option")
+    assert len(design["modules"]) == 1, (
+        "expected one top level module, " "try setting the 'design_scope' option"
+    )
     SCYRunnerContext.scycfg.options.design_scope = design["modules"][0]["name"]
+
 
 def run_tree():
     # loading context
@@ -164,7 +175,7 @@ def run_tree():
     log(f"preparing input files")
     task_sby = workdir / "common.sby"
 
-    with open(task_sby, 'w') as sbyfile:
+    with open(task_sby, "w") as sbyfile:
         sbycfg.dump_common(sbyfile)
 
     if scycfg.args.dump_common:
@@ -183,7 +194,7 @@ def run_tree():
 
     def parse_add_log():
         # load back added cells
-        with open(add_log, 'r') as f:
+        with open(add_log, "r") as f:
             cell_dump = f.read()
             cell_regex = r"(?P<cell>\S+)(?P<body>(?:\n  (?:.*))*)"
             for cell_m in re.finditer(cell_regex, cell_dump):
@@ -215,13 +226,14 @@ def run_tree():
         root_task = parse_adds_task
 
     # modify config for full sby runs
-    common_il = os.path.join('common', 'model', 'design_prep.il')
+    common_il = os.path.join("common", "model", "design_prep.il")
     sbycfg.prep_shared(common_il)
 
     SCYRunnerContext.add_cells = add_cells
     SCYRunnerContext.enable_cells = enable_cells
     SCYTaskContext.recurse = True
     run_children(common_task.children, root_task)
+
 
 def run_task():
     # loading context
@@ -236,11 +248,16 @@ def run_task():
 
     if task.uses_sby:
         # generate sby
-        taskcfg = gen_sby(task, SCYRunnerContext.sbycfg, SCYRunnerContext.scycfg,
-                            SCYRunnerContext.add_cells, SCYRunnerContext.enable_cells)
+        taskcfg = gen_sby(
+            task,
+            SCYRunnerContext.sbycfg,
+            SCYRunnerContext.scycfg,
+            SCYRunnerContext.add_cells,
+            SCYRunnerContext.enable_cells,
+        )
         task_sby = workdir / f"{task.dir}.sby"
         log(f"generating {task_sby}")
-        with open(task_sby, 'w') as sbyfile:
+        with open(task_sby, "w") as sbyfile:
             taskcfg.dump(sbyfile)
         task_trace = f"{task.tracestr}.{SCYRunnerContext.scycfg.options.trace_ext}"
         if not setupmode:
@@ -251,9 +268,13 @@ def run_task():
             root_task.events(tl.process.OutputEvent).process(handle_cover_output)
     elif task.stmt == "trace":
         if SCYRunnerContext.scycfg.options.replay_vcd:
-            log_exception(SCYTreeError(task.stmt, "replay_vcd option incompatible with trace statement"))
+            log_exception(
+                SCYTreeError(task.stmt, "replay_vcd option incompatible with trace statement")
+            )
         if not task.is_leaf:
-            log_exception(SCYTreeError(task.children[0].stmt, "trace statement does not support children"))
+            log_exception(
+                SCYTreeError(task.children[0].stmt, "trace statement does not support children")
+            )
         if task.is_root or task.parent.is_common:
             log_exception(SCYTreeError(task.full_line, "trace statement cannot be root task"))
         if not SCYRunnerContext.sbycfg.files:
@@ -263,13 +284,17 @@ def run_task():
             dump_trace(task, workdir)
     elif task.stmt == "append":
         if SCYRunnerContext.scycfg.options.replay_vcd:
-            log_exception(SCYTreeError(task.stmt, "replay_vcd option incompatible with append statement"))
+            log_exception(
+                SCYTreeError(task.stmt, "replay_vcd option incompatible with append statement")
+            )
         if task.is_root or task.parent.is_common:
             log_exception(SCYTreeError(task.full_line, "append statement cannot be root task"))
         try:
             task.traces[-1] += f" -append {int(task.name):d}"
         except IndexError:
-            log_exception(SCYTreeError(task.full_line, f"append expected parent task to produce a trace"))
+            log_exception(
+                SCYTreeError(task.full_line, f"append expected parent task to produce a trace")
+            )
         except ValueError:
             log_exception(SCYValueError(task.name, "must be integer literal"))
         SCYRunnerContext.task_steps[f"{task.linestr}_{task.name}"] = int(task.name)
@@ -284,12 +309,15 @@ def run_task():
         try:
             task_cell = SCYRunnerContext.enable_cells[task.name].copy()
         except KeyError:
-            log_exception(SCYUnknownCellError(task.full_line, f"attempted to {task.stmt} unknown cell"))
+            log_exception(
+                SCYUnknownCellError(task.full_line, f"attempted to {task.stmt} unknown cell")
+            )
         task_cell["status"] = task.stmt
         task_cell["line"] = task.line
         task.add_or_update_enable_cell(task.name, task_cell)
     else:
-        # this shouldn't happen since an unrecognised statement should have been caught by the tree parse
+        # this shouldn't happen since an unrecognised statement should have been caught
+        # by the tree parse
         log_exception(SCYUnknownStatementError(task.full_line, "unrecognised statement"))
 
     # add traces to children
