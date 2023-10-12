@@ -3,9 +3,68 @@ name = "scy"
 version = "0.0.1"
 description = "Sequence of Covers with Yosys"
 
-dependencies = [
-    "yosys_mau @ git+https://github.com/YosysHQ/mau@main"
+dependencies = ["yosys_mau @ git+https://github.com/YosysHQ/mau@main"]
+
+[project.optional-dependencies]
+dev = [
+    # Documentation
+    "sphinx",
+    "furo",
+
+    # Testing
+    "pytest",
+    "pytest-cov",
+    "pytest-xdist[psutil]",
+
+    # Formatting
+    "black",
+
+    # Linting
+    "ruff>=0.0.292",
+
+    # Type checking
+    "pyright==1.1.311",
+    # jix: When using Python 3.8, newer versions of pyright report spurious
+    # errors. With Python 3.11 and newer pyright, those are not reported, and I
+    # think the code is fine, but I haven't figured out if this corresponds to
+    # any known issues in pyright nor have I produced a minimal reproducer.
 ]
 
 [project.scripts]
 scy = "scy.scy:main"
+
+[build-system]
+requires = ["setuptools >= 61.0.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.black]
+line-length = 100
+
+[tool.ruff]
+line-length = 100
+
+select = [
+    "E",
+    "F",
+    "I",
+    "UP037", # quoted-annotation
+    "FA102", # future-required-type-annotation
+]
+fixable = [
+    "I",     # Import order
+    "F401",  # Imported but unused
+    "F541",  # f-string without any placeholders
+    "UP037", # quoted-annotation
+]
+ignore = ["E731"]
+
+target-version = "py38"
+
+[tool.pytest.ini_options]
+addopts = ["--import-mode=importlib"]
+
+filterwarnings = [ # Remove this once https://github.com/pytest-dev/pytest-cov/issues/557 hits a pytest-cov release
+    "error",
+    "ignore:The --rsyncdir command line argument and rsyncdirs config variable are deprecated.:DeprecationWarning",
+]
+

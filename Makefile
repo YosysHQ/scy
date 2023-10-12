@@ -1,29 +1,74 @@
+help:
+	@echo "The following targets are available:"
+	@echo
+	@echo "docs:"
+	@echo "  build the HTML documentation"
+	@echo
+	@echo "docs-{html,clean,...}:"
+	@echo "  run the corresponding make target in the docs directory"
+	@echo
+	@echo "test:"
+	@echo "  run the test suite"
+	@echo
+	@echo "formatting:"
+	@echo "  check source code formatting"
+	@echo
+	@echo "reformat:"
+	@echo "  reformat source code"
+	@echo
+	@echo "lint:"
+	@echo "  check code style"
+	@echo
+	@echo "typecheck:"
+	@echo "  run static type checker"
+	@echo
+	@echo "dev-install:"
+	@echo "  install the package in development mode including dev dependencies"
+	@echo
+
+ifneq ($(wildcard Makefile.conf),)
+include Makefile.conf
+endif
+
+O ?=
 
 PYTHON ?= python3
 
-.PHONY: docs test install clean
+SPHINXBUILD ?= $(PYTHON) -m sphinx-build
+
+.PHONY: help docs test formatting reformat lint fix
+.PHONY: typecheck ci
 
 docs: docs-html
 
 docs-%:
 	$(MAKE) -C docs $*
 
-test: check-scy
-	$(PYTHON) -m pytest -n auto -rs
+test:
+	$(PYTHON) -m pytest \
+		--cov-report html --cov-report term \
+		--cov scy \
+		-n auto -q $(O)
 
-test-cov: check-scy
-	$(PYTHON) -m pytest -n auto \
-			--cov-report html --cov scy
+formatting:
+	$(PYTHON) -m black --check --diff src tests example $(O)
 
-install:
-	$(PYTHON) -m pip install -e .
+reformat:
+	$(PYTHON) -m black src tests example $(O)
 
-check-scy:
-	@if ! which scy >/dev/null 2>&1; then \
-		echo "'make test' requires scy to be installed"; \
-		echo "run 'make install' first."; \
-		exit 1; \
-	fi
+lint:
+	$(PYTHON) -m ruff check src tests example $(O)
+
+fix:
+	$(PYTHON) -m ruff check --fix src tests example $(O)
+
+typecheck:
+	$(PYTHON) -m pyright src tests example $(O)
+
+dev-install:
+	$(PYTHON) -m pip install -e '.[dev]' $(O)
+
+ci: formatting lint typecheck test docs-html
 
 clean: docs-clean
-	rm -rf .pytest_cache
+	rm -rf .coverage .pytest_cache .mypy_cache .ruff_cache htmlcov
