@@ -1,9 +1,13 @@
-from contextlib import nullcontext as does_not_raise
+from __future__ import annotations
+
 import pathlib
-import pytest
+from contextlib import nullcontext as does_not_raise
 from textwrap import dedent
 
-from scy.scy_config_parser import SCYConfig, SCY_arg_parser
+import pytest
+import scy.scy_task_runner as scytr
+import yosys_mau.task_loop as tl
+from scy.scy_config_parser import SCY_arg_parser, SCYConfig
 from scy.scy_exceptions import (
     SCYTreeError,
     SCYUnknownCellError,
@@ -11,19 +15,16 @@ from scy.scy_exceptions import (
     SCYValueError,
 )
 from scy.scy_sby_bridge import SBYBridge
-import scy.scy_task_runner as scytr
 from scy.scy_task_tree import TaskTree
-
-import yosys_mau.task_loop as tl
 
 
 class TaskRunner:
     def __init__(self, sbycfg: SBYBridge, scycfg: SCYConfig):
         self.sbycfg = sbycfg
         self.scycfg = scycfg
-        self.add_cells: "dict[int, dict[str]]" = {}
-        self.enable_cells: "dict[str, dict[str, str | bool]]" = {}
-        self.task_steps: "dict[str, int]" = {}
+        self.add_cells: dict[int, dict[str]] = {}
+        self.enable_cells: dict[str, dict[str, str | bool]] = {}
+        self.task_steps: dict[str, int] = {}
 
     def _prep_loop(self, recurse: bool):
         scytr.SCYTaskContext.recurse = recurse
@@ -45,7 +46,7 @@ class TaskRunner:
     def run_task_loop(self, task: TaskTree, recurse=True):
         tl.run_task_loop(lambda: self._run_children([task], recurse))
 
-    def _run_children(self, children: "list[TaskTree]", recurse: bool):
+    def _run_children(self, children: list[TaskTree], recurse: bool):
         self._prep_loop(recurse)
         scytr.run_children(children, None)
 

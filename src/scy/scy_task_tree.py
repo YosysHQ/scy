@@ -1,13 +1,16 @@
+from __future__ import annotations
+
 from typing import Iterable
+
 from yosys_mau import source_str
-from yosys_mau.source_str import re, SourceStr
+from yosys_mau.source_str import SourceStr, re
 
 
-def from_string(string: "SourceStr | str", L0: int = 0, depth: int = 0):
+def from_string(string: SourceStr | str, L0: int = 0, depth: int = 0):
     if not isinstance(string, SourceStr):
         string = source_str.from_content(string, "dev/null")
     nest_regex = r"^(?P<ws>[ \t]*)(.+(\r?\n((?P=ws)[ \t]+.*|$))*)"
-    tree_list: "list[TaskTree | str] | TaskTree" = []
+    tree_list: list[TaskTree | str] | TaskTree = []
     for tree in re.finditer(nest_regex, string, flags=re.MULTILINE):
         tree_str = tree.group()
         stmt_regex = (
@@ -49,7 +52,7 @@ def from_string(string: "SourceStr | str", L0: int = 0, depth: int = 0):
     return tree_list
 
 
-def make_common(children: "list[TaskTree|str]" = None):
+def make_common(children: list[TaskTree | str] = None):
     return TaskTree("", "common", 0, children=children)
 
 
@@ -61,12 +64,12 @@ class TaskTree:
         line: int,
         steps: int = 0,
         depth: int = 0,
-        parent: "TaskTree" = None,
-        children: "list[TaskTree|str]" = None,
+        parent: TaskTree = None,
+        children: list[TaskTree | str] = None,
         body: str = "",
         asgmt: str = None,
         full_line: SourceStr = None,
-        enable_cells: "dict[str, dict[str, str]]" = None,
+        enable_cells: dict[str, dict[str, str]] = None,
     ):
         self.name = name
         self.stmt = stmt
@@ -74,7 +77,7 @@ class TaskTree:
         self.steps = steps
         self.depth = depth
         self.parent = parent
-        self.children: "list[TaskTree|str]" = []
+        self.children: list[TaskTree | str] = []
         self.body = body
         if children:
             self.add_children(children)
@@ -89,7 +92,7 @@ class TaskTree:
         else:
             self.full_line = self.stmt
 
-    def add_children(self, children: "list[TaskTree | str]"):
+    def add_children(self, children: list[TaskTree | str]):
         for child in children:
             if isinstance(child, str):
                 if self.body:
@@ -100,7 +103,7 @@ class TaskTree:
                 self.add_child(child)
         return self
 
-    def add_child(self, child: "TaskTree"):
+    def add_child(self, child: TaskTree):
         if child.parent:
             raise NotImplementedError(
                 "reassigning child's parent without unassigning other parent's child"
@@ -111,10 +114,10 @@ class TaskTree:
         child.reduce_depth(-1)
         return self
 
-    def add_enable_cell(self, name: str, cell: "dict[str, str]"):
+    def add_enable_cell(self, name: str, cell: dict[str, str]):
         self.enable_cells[name] = cell
 
-    def add_or_update_enable_cell(self, name: str, cell: "dict[str, str]"):
+    def add_or_update_enable_cell(self, name: str, cell: dict[str, str]):
         try:
             self.enable_cells[name].update(cell)
         except KeyError:
@@ -180,7 +183,7 @@ class TaskTree:
     def linestr(self) -> str:
         return f"L{self.line:03d}_{0 if self.is_root else self.parent.line:03d}"
 
-    def get_all_linestr(self) -> "list[str]":
+    def get_all_linestr(self) -> list[str]:
         linestr = [f"L{self.line:03d}"]
         if self.is_root:
             return linestr
@@ -223,7 +226,7 @@ class TaskTree:
         for child in self.children:
             child.reduce_depth(amount)
 
-    def traverse(self, include_self=True) -> Iterable["TaskTree"]:
+    def traverse(self, include_self=True) -> Iterable[TaskTree]:
         if include_self:
             yield self
         for child in self.children:

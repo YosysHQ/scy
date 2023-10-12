@@ -1,11 +1,15 @@
+from __future__ import annotations
+
 import copy
 import os
-from pathlib import Path
 import re
+from pathlib import Path
+
+from yosys_mau import task_loop
+
 from scy.scy_config_parser import SCYConfig
 from scy.scy_exceptions import SCYSubProcessException
 from scy.scy_task_tree import TaskTree
-from yosys_mau import task_loop
 
 
 class SBYException(SCYSubProcessException):
@@ -33,12 +37,12 @@ def from_scycfg(scycfg: SCYConfig):
 
 
 class SBYBridge:
-    def __init__(self, data: "dict[str, list[str]]" = {}):
+    def __init__(self, data: dict[str, list[str]] = {}):
         self.data = {}
         for name, contents in data.items():
             self.add_section(name, contents)
 
-    def add_section(self, name: str, contents: "str | list[str]"):
+    def add_section(self, name: str, contents: str | list[str]):
         if isinstance(contents, str):
             contents = contents.splitlines()
         try:
@@ -47,27 +51,27 @@ class SBYBridge:
             self.data[name] = []
 
     @property
-    def options(self) -> "list[str]":
+    def options(self) -> list[str]:
         return self.data.get("options")
 
     @options.setter
-    def options(self, contents: "str | list[str]"):
+    def options(self, contents: str | list[str]):
         self.add_section("options", contents)
 
     @property
-    def script(self) -> "list[str]":
+    def script(self) -> list[str]:
         return self.data.get("script")
 
     @script.setter
-    def script(self, contents: "str | list[str]"):
+    def script(self, contents: str | list[str]):
         self.add_section("script", contents)
 
     @property
-    def files(self) -> "list[str]":
+    def files(self) -> list[str]:
         return self.data.get("files")
 
     @files.setter
-    def files(self, contents: "str | list[str]"):
+    def files(self, contents: str | list[str]):
         self.add_section("files", contents)
 
     def fix_relative_paths(self, dir_prepend: str):
@@ -76,7 +80,7 @@ class SBYBridge:
                 if s and not os.path.isabs(s):
                     self.files[i] = os.path.join(dir_prepend, s)
 
-    def dump(self, sbyfile, skip_sections: "list[str]" = []):
+    def dump(self, sbyfile, skip_sections: list[str] = []):
         for name, body in self.data.items():
             if name in skip_sections:
                 continue
@@ -108,7 +112,7 @@ class SBYBridge:
 
     def handle_error(
         self, event_task: task_loop.Process, check_error: bool, failed_task: TaskTree
-    ) -> "Exception | None":
+    ) -> Exception | None:
         task_loop.LogContext.scope += " SBY"
         event_cmd = " ".join(event_task.command)
         input_file = Path(event_task.command[-1])
@@ -132,7 +136,7 @@ class SBYBridge:
 
         # log summary
         regex = r"summary: (.*)"
-        summary: "list[str]" = re.findall(regex, log, flags=re.MULTILINE)
+        summary: list[str] = re.findall(regex, log, flags=re.MULTILINE)
         for msg in summary:
             task_loop.log_warning(msg)
             if check_error and "unreached cover statements" in msg:
@@ -140,7 +144,7 @@ class SBYBridge:
 
         # check reported error
         regex = r"(ERROR): (.*)"
-        problems: "list[tuple[str, str]]" = re.findall(regex, log, flags=re.MULTILINE)
+        problems: list[tuple[str, str]] = re.findall(regex, log, flags=re.MULTILINE)
         for _, msg in problems:
             task_loop.log_error(msg, raise_error=False)
             if check_error and "Shell command failed!" in msg:
@@ -158,8 +162,8 @@ def parse_common_sby(common_task: TaskTree, sbycfg: SBYBridge, scycfg: SCYConfig
     assert common_task.is_common, "expected tree root to be common.sby generation"
 
     # preparse tree to extract cell generation
-    add_cells: "dict[int, dict[str]]" = {}
-    enable_cells: "dict[str, dict[str, str | bool]]" = {}
+    add_cells: dict[int, dict[str]] = {}
+    enable_cells: dict[str, dict[str, str | bool]] = {}
 
     def add_enable_cell(hdlname: str, stmt: str):
         enable_cells.setdefault(hdlname, {"disable": "1'b0"})
@@ -208,8 +212,8 @@ def gen_sby(
     task: TaskTree,
     sbycfg: SBYBridge,
     scycfg: SCYConfig,
-    add_cells: "dict[int, dict[str]]",
-    enable_cells: "dict[str, dict[str, str | bool]]",
+    add_cells: dict[int, dict[str]],
+    enable_cells: dict[str, dict[str, str | bool]],
 ):
     sbycfg = copy.deepcopy(sbycfg)
 
@@ -257,7 +261,7 @@ def gen_sby(
         traces_script.append(f"sim -w -r {trace}{trace_scope}")
     if task.stmt == "cover":
         traces_script.append(f"delete t:$cover c:{task.name} %d")
-        traces_script.append(f"select -assert-count 1 t:$cover")
+        traces_script.append("select -assert-count 1 t:$cover")
         sbycfg.script.extend(traces_script)
     else:
         raise NotImplementedError(task.stmt)

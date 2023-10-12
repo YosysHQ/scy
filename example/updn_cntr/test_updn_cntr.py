@@ -1,9 +1,11 @@
-import pytest
+from __future__ import annotations
+
 import re
-import subprocess
 import shutil
+import subprocess
 from pathlib import Path
 
+import pytest
 from scy.scy_task_tree import TaskTree
 
 # example up_counter.scy
@@ -31,7 +33,7 @@ cover cp_7:
 
 
 @pytest.fixture(scope="class")
-def base_cfg() -> "dict[str, list[str]]":
+def base_cfg() -> dict[str, list[str]]:
     return {
         "design": ["read -sv up_counter.sv", "prep -top up_counter"],
         "files": ["up_counter.sv"],
@@ -63,7 +65,7 @@ def sequence(test):
     except KeyError:
         pass
 
-    sequence: "list[str]" = []
+    sequence: list[str] = []
     regex = r"(\d+)"
     subst = r"cover cp_\g<0>:"
     for test in test["data"]:
@@ -110,7 +112,7 @@ def scy_dir(tmp_path_factory: pytest.TempPathFactory, test, request: pytest.Fixt
 
 @pytest.fixture(scope="class")
 def scy_cfg(
-    scy_dir: Path, base_cfg: "dict[str, list[str]]", sequence, cover_stmts, test: "dict[str, str]"
+    scy_dir: Path, base_cfg: dict[str, list[str]], sequence, cover_stmts, test: dict[str, str]
 ):
     if "mkdir" in test:
         new_dir = scy_dir / test["mkdir"]
@@ -133,7 +135,7 @@ def output_dir(scy_dir: Path, scy_cfg: Path):
 
 
 @pytest.fixture(scope="class")
-def cmd_args(test: "dict[str, list[str]]"):
+def cmd_args(test: dict[str, list[str]]):
     args = test.get("args", [])
     if "error" in test:
         args.extend("-E --checkerror".split())
@@ -228,7 +230,7 @@ class TestComplexClass:
         scy_exec.check_returncode()
 
     @pytest.mark.usefixtures("scy_exec")
-    def test_files(self, test: "dict[str, str|list[str]]", scy_dir: Path, output_dir: Path):
+    def test_files(self, test: dict[str, str | list[str]], scy_dir: Path, output_dir: Path):
         assert test["name"] in scy_dir.name
         if "sequence" in test:
             # get all output files for cover and trace statements
@@ -265,7 +267,7 @@ class TestComplexClass:
                 output_files.remove("__final.vcd")
             assert not output_files, f"unmatched files {output_files}"
 
-    def test_chunks(self, test: "dict[str]", scy_chunks: "list[int]"):
+    def test_chunks(self, test: dict[str], scy_chunks: list[int]):
         if "chunks" in test:
             assert len(scy_chunks) == len(test["chunks"])
             if scy_chunks != test["chunks"]:
@@ -343,7 +345,7 @@ class TestComplexClass:
     scope="class",
 )
 class TestErrorsClass:
-    def test_runs(self, test: "dict[str, str | list]", scy_exec: subprocess.CompletedProcess):
+    def test_runs(self, test: dict[str, str | list], scy_exec: subprocess.CompletedProcess):
         if "code" in test:
             assert scy_exec.returncode == test["code"]
         else:
@@ -403,7 +405,7 @@ class TestArgsClass:
         scy_exec.check_returncode()
 
     @pytest.mark.usefixtures("scy_exec")
-    def test_files(self, test: "dict[str, str|list[str]]", output_dir: Path):
+    def test_files(self, test: dict[str, str | list[str]], output_dir: Path):
         if "--dumptree" in test["args"]:
             assert not output_dir.exists()
             return
@@ -418,8 +420,8 @@ class TestArgsClass:
 
     def test_output(
         self,
-        test: "dict[str, str | list]",
-        sequence: "list[str]",
+        test: dict[str, str | list],
+        sequence: list[str],
         scy_exec: subprocess.CompletedProcess,
     ):
         scy_out = bytes.decode(scy_exec.stdout)
@@ -439,17 +441,17 @@ class TestArgsClass:
 
 
 @pytest.fixture(scope="class")
-def sequence_add_cells(sequence: "list[str]"):
+def sequence_add_cells(sequence: list[str]):
     return [s for s in sequence if "add" in s]
 
 
 @pytest.fixture(scope="class")
-def sequence_enable_cells(sequence: "list[str]"):
+def sequence_enable_cells(sequence: list[str]):
     return [s for s in sequence if "enable" in s or "disable" in s]
 
 
 @pytest.fixture(scope="class")
-def common_sby(scy_exec, output_dir: Path) -> "dict[str, str]":
+def common_sby(scy_exec, output_dir: Path) -> dict[str, str]:
     with open(output_dir / "common.sby", "r") as f:
         sbydata = f.read()
 
@@ -459,8 +461,8 @@ def common_sby(scy_exec, output_dir: Path) -> "dict[str, str]":
 
 
 @pytest.fixture(scope="class")
-def sby_add_cells(common_sby: "dict[str, str]"):
-    add_cells: "list[tuple[str, str]]" = []
+def sby_add_cells(common_sby: dict[str, str]):
+    add_cells: list[tuple[str, str]] = []
     for line in common_sby["script"].splitlines():
         if line.startswith("add"):
             words = line.split()
@@ -469,7 +471,7 @@ def sby_add_cells(common_sby: "dict[str, str]"):
 
 
 @pytest.fixture(scope="class")
-def sby_setattrs(common_sby: "dict[str, str]"):
+def sby_setattrs(common_sby: dict[str, str]):
     return [s for s in common_sby["script"].splitlines() if s.startswith("setattr")]
 
 
@@ -515,7 +517,7 @@ class TestSBYGenClass:
         scy_exec.check_returncode()
 
     def test_includes_add_cells(
-        self, sequence_add_cells: "list[str]", sby_add_cells: "list[tuple[str, str]]"
+        self, sequence_add_cells: list[str], sby_add_cells: list[tuple[str, str]]
     ):
         for cell in sequence_add_cells:
             found = False
@@ -525,7 +527,7 @@ class TestSBYGenClass:
                     break
             assert found, f"{cell!r} not found in {sby_add_cells}"
 
-    def test_add_setattrs(self, sequence_add_cells: "list[str]", sby_setattrs: "list[str]"):
+    def test_add_setattrs(self, sequence_add_cells: list[str], sby_setattrs: list[str]):
         for cell in sequence_add_cells:
             found = False
             for setattr in sby_setattrs:
@@ -537,7 +539,7 @@ class TestSBYGenClass:
                     break
             assert found, f"{cell!r} not found in {sby_setattrs}"
 
-    def test_enable_setattrs(self, sequence_enable_cells: "list[str]", sby_setattrs: "list[str]"):
+    def test_enable_setattrs(self, sequence_enable_cells: list[str], sby_setattrs: list[str]):
         for cell in sequence_enable_cells:
             found = False
             for setattr in sby_setattrs:
@@ -549,7 +551,7 @@ class TestSBYGenClass:
                     break
             assert found, f"{cell!r} not found in {sby_setattrs}"
 
-    def test_add_log(self, sequence_add_cells, sequence_enable_cells, common_sby: "dict[str, str]"):
+    def test_add_log(self, sequence_add_cells, sequence_enable_cells, common_sby: dict[str, str]):
         dump_str = "tee -o add_cells.log printattrs"
         if sequence_add_cells or sequence_enable_cells:
             assert dump_str in common_sby["script"]

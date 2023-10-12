@@ -1,5 +1,7 @@
+from __future__ import annotations
+
 import argparse
-from scy.scy_task_tree import TaskTree
+
 from yosys_mau.config_parser import (
     BoolValue,
     ConfigOptions,
@@ -11,8 +13,10 @@ from yosys_mau.config_parser import (
     StrValue,
     postprocess_section,
 )
-from yosys_mau.task_loop import log_warning
 from yosys_mau.source_str import re, source_map
+from yosys_mau.task_loop import log_warning
+
+from scy.scy_task_tree import TaskTree
 
 
 def SCY_arg_parser():
@@ -109,7 +113,7 @@ class SCYConfig(ConfigParser):
     options = OptionsSection(SCYOptions)
 
     @postprocess_section(StrSection())
-    def sequence(self, sequence: str) -> "list[TaskTree | str]":
+    def sequence(self, sequence: str) -> list[TaskTree | str]:
         # give a warning if whitespace mixes spaces and tabs
         ws_regex = r"^(?P<ws>[ \t]*)"
         for line in re.finditer(ws_regex, sequence, flags=re.MULTILINE):

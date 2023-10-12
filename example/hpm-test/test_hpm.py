@@ -1,11 +1,14 @@
-import pytest
+from __future__ import annotations
+
 import subprocess
 from pathlib import Path
 from textwrap import dedent
 
+import pytest
+
 
 def gen_cfg(name: str):
-    config: "dict[str, list[str]]" = {
+    config: dict[str, list[str]] = {
         "design": dedent(
             """
                 # read source
@@ -97,7 +100,7 @@ def gen_cfg(name: str):
     return config
 
 
-def write_cfg(root: Path, filename: Path, config: "dict[str, list[str]]"):
+def write_cfg(root: Path, filename: Path, config: dict[str, list[str]]):
     with open(root / filename, mode="w") as f:
         for k, v in config.items():
             f.write(f"[{k}]\n")

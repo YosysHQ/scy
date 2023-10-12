@@ -1,6 +1,7 @@
-import pytest
-import subprocess
 import re
+import subprocess
+
+import pytest
 
 
 # Not sure how to solve this without requiring scy to be installed

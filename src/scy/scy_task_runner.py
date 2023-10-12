@@ -1,23 +1,10 @@
-import os
+from __future__ import annotations
+
 import json
+import os
 import re
 from pathlib import Path
 from typing import cast
-
-from scy.scy_task_tree import TaskTree
-from scy.scy_config_parser import SCYConfig
-from scy.scy_sby_bridge import (
-    gen_sby,
-    parse_common_sby,
-    SBYBridge,
-)
-from scy.scy_exceptions import (
-    SCYSubProcessException,
-    SCYTreeError,
-    SCYUnknownCellError,
-    SCYUnknownStatementError,
-    SCYValueError,
-)
 
 import yosys_mau.task_loop as tl
 from yosys_mau.task_loop import (
@@ -26,8 +13,23 @@ from yosys_mau.task_loop import (
     log_exception,
 )
 
+from scy.scy_config_parser import SCYConfig
+from scy.scy_exceptions import (
+    SCYSubProcessException,
+    SCYTreeError,
+    SCYUnknownCellError,
+    SCYUnknownStatementError,
+    SCYValueError,
+)
+from scy.scy_sby_bridge import (
+    SBYBridge,
+    gen_sby,
+    parse_common_sby,
+)
+from scy.scy_task_tree import TaskTree
 
-def gen_traces(task: TaskTree) -> "list[str]":
+
+def gen_traces(task: TaskTree) -> list[str]:
     # reversing trace order means that the most recent trace will be first
     task.traces.reverse()
     traces = []
@@ -119,9 +121,9 @@ async def on_proc_exit(event: tl.process.ExitEvent):
 class SCYRunnerContext:
     sbycfg: SBYBridge
     scycfg: SCYConfig
-    add_cells: "dict[int, dict[str]]"
-    enable_cells: "dict[str, dict[str, str | bool]]"
-    task_steps: "dict[str, int]"
+    add_cells: dict[int, dict[str]]
+    enable_cells: dict[str, dict[str, str | bool]]
+    task_steps: dict[str, int]
 
 
 @tl.task_context
@@ -139,7 +141,7 @@ async def handle_cover_output(lines):
             task_steps[step_match["task"]] = int(step_match["step"])
 
 
-def run_children(children: "list[TaskTree]", blocker: "tl.Task"):
+def run_children(children: list[TaskTree], blocker: tl.Task):
     for child in children:
         child_task = tl.Task(on_run=run_task)
         child_task[SCYTaskContext].task = child
@@ -172,7 +174,7 @@ def run_tree():
         log_exception(e)
 
     # use sby to prepare input
-    log(f"preparing input files")
+    log("preparing input files")
     task_sby = workdir / "common.sby"
 
     with open(task_sby, "w") as sbyfile:
@@ -293,7 +295,7 @@ def run_task():
             task.traces[-1] += f" -append {int(task.name):d}"
         except IndexError:
             log_exception(
-                SCYTreeError(task.full_line, f"append expected parent task to produce a trace")
+                SCYTreeError(task.full_line, "append expected parent task to produce a trace")
             )
         except ValueError:
             log_exception(SCYValueError(task.name, "must be integer literal"))
@@ -302,7 +304,7 @@ def run_task():
         try:
             add_cell = SCYRunnerContext.add_cells[task.line]
         except KeyError:
-            log_exception(SCYUnknownCellError(task.full_line, f"attempted to add unknown cell"))
+            log_exception(SCYUnknownCellError(task.full_line, "attempted to add unknown cell"))
         task.add_enable_cell(add_cell["cell"], add_cell)
         task.reduce_depth()
     elif task.stmt in ["enable", "disable"]:

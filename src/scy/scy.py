@@ -1,23 +1,26 @@
 #!/usr/bin/env python3
+from __future__ import annotations
 
 import argparse
 import os
-from pathlib import Path
 import shutil
-from scy.scy_config_parser import SCYConfig, SCY_arg_parser
+from pathlib import Path
+
+import yosys_mau.task_loop as tl
+import yosys_mau.task_loop.job_server as job
+from yosys_mau import source_str
+from yosys_mau.task_loop import LogContext, log, log_exception, log_warning, logging
+
+from scy.scy_config_parser import SCY_arg_parser, SCYConfig
 from scy.scy_sby_bridge import SBYBridge, SBYException
 from scy.scy_task_runner import SCYRunnerContext, SCYTaskContext, dump_trace, run_tree
 from scy.scy_task_tree import TaskTree
-from yosys_mau import source_str
-import yosys_mau.task_loop as tl
-from yosys_mau.task_loop import LogContext, log, log_warning, log_exception, logging
-import yosys_mau.task_loop.job_server as job
 
 LogContext.app_name = "SCY"
 
 
 class SCYTask:
-    def __init__(self, args: "argparse.Namespace | None" = None):
+    def __init__(self, args: argparse.Namespace | None = None):
         self.args = args
         self.localdir = False
         self.failed_tree = None
@@ -64,7 +67,7 @@ class SCYTask:
         )
 
     def display_stats(self):
-        trace_tasks: "list[TaskTree]" = []
+        trace_tasks: list[TaskTree] = []
         log("Chunks:")
         for task in SCYRunnerContext.scycfg.root.traverse():
             if task.stmt == "trace":

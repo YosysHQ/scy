@@ -1,9 +1,12 @@
+from __future__ import annotations
+
 from textwrap import dedent
-from scy.scy_task_tree import TaskTree
+
 import pytest
+from scy.scy_task_tree import TaskTree
 
 
-def first_tree_from_string(input_str: str) -> "TaskTree | str":
+def first_tree_from_string(input_str: str) -> TaskTree | str:
     return TaskTree.from_string(input_str)[0]
 
 
@@ -17,7 +20,7 @@ def test_empty_tree():
 
 
 @pytest.fixture(params=["from_string", "constructed"])
-def mintree(request) -> "TaskTree | str":
+def mintree(request) -> TaskTree | str:
     if request.param == "from_string":
         return first_tree_from_string(
             dedent(
@@ -296,12 +299,12 @@ def multi_root_input(request):
 
 
 @pytest.fixture
-def multi_root_tree(multi_root_input: "dict[str,str|int]"):
+def multi_root_tree(multi_root_input: dict[str, str | int]):
     return TaskTree.from_string(multi_root_input["input_str"])
 
 
 def test_multi_root_len(
-    multi_root_input: "dict[str,str|int]", multi_root_tree: "list[TaskTree|str]"
+    multi_root_input: dict[str, str | int], multi_root_tree: list[TaskTree | str]
 ):
     expected_len = multi_root_input["len"]
     actual_len = len(multi_root_tree)
@@ -309,7 +312,7 @@ def test_multi_root_len(
 
 
 def test_multi_root_trees(
-    multi_root_input: "dict[str,str|int]", multi_root_tree: "list[TaskTree|str]"
+    multi_root_input: dict[str, str | int], multi_root_tree: list[TaskTree | str]
 ):
     expected_trees = multi_root_input["trees"]
     actual_trees = len([x for x in multi_root_tree if isinstance(x, TaskTree)])
@@ -460,7 +463,7 @@ def line_counts_tree(line_counts_input):
     return first_tree_from_string(line_counts_input["input_str"])
 
 
-def test_tree_lines(line_counts_input: "dict[str, list[int]]", line_counts_tree: TaskTree):
+def test_tree_lines(line_counts_input: dict[str, list[int]], line_counts_tree: TaskTree):
     expected = line_counts_input["tree_lines"]
     actual = get_tree_list(lambda x: x.line, line_counts_tree)
     assert actual == expected
@@ -469,7 +472,7 @@ def test_tree_lines(line_counts_input: "dict[str, list[int]]", line_counts_tree:
 @pytest.mark.parametrize("recurse", [True, False])
 def test_tree_print_lines(
     recurse: bool,
-    line_counts_input: "dict[str, tuple[int,int]]",
+    line_counts_input: dict[str, tuple[int, int]],
     line_counts_tree: TaskTree,
 ):
     expected = line_counts_input["print_lines"][1 if recurse else 0]
