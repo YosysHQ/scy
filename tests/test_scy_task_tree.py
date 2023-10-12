@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from textwrap import dedent
+from typing import Any
 
 import pytest
 from scy.scy_task_tree import TaskTree
@@ -113,12 +114,14 @@ def test_enable_stmt():
         )
     )
 
+    assert isinstance(task_tree, TaskTree)
     assert len(task_tree) == 3
 
     stmts = get_tree_list(lambda x: x.stmt, task_tree)
     assert stmts == ["cover", "enable", "cover"]
 
     enable_task = task_tree.children[0]
+    assert isinstance(enable_task, TaskTree)
     assert enable_task.stmt == "enable"
     assert enable_task.asgmt == "b"
     assert enable_task.name == "cell"
@@ -135,6 +138,7 @@ def test_enable_body():
         )
     )
     print(task_tree)
+    assert isinstance(task_tree, TaskTree)
     assert len(task_tree) == 2
     assert task_tree.body.strip() == "enable cell b"
     assert task_tree.has_local_enable_cells
@@ -299,7 +303,7 @@ def multi_root_input(request):
 
 
 @pytest.fixture
-def multi_root_tree(multi_root_input: dict[str, str | int]):
+def multi_root_tree(multi_root_input: dict[str, Any]):
     return TaskTree.from_string(multi_root_input["input_str"])
 
 
@@ -330,6 +334,7 @@ def test_multi_root_trees(
 )
 def test_add_children(input_a: str, input_b: str, count: int):
     tree_a = first_tree_from_string(input_a)
+    assert isinstance(tree_a, TaskTree)
     tree_a.add_children(TaskTree.from_string(input_b))
     assert len(tree_a) == count
 
@@ -369,6 +374,7 @@ def test_add_children(input_a: str, input_b: str, count: int):
 def test_statement_properties(input_str, prop, expected, child):
     task_tree = first_tree_from_string(input_str)
     if child:
+        assert isinstance(task_tree, TaskTree)
         task_tree = task_tree.children[0]
     actual = getattr(task_tree, prop)
     assert actual == expected
@@ -386,6 +392,7 @@ def test_statement_properties(input_str, prop, expected, child):
 def test_statement_callable(input_str, func, expected, child):
     task_tree = first_tree_from_string(input_str)
     if child:
+        assert isinstance(task_tree, TaskTree)
         task_tree = task_tree.children[0]
     actual = getattr(task_tree, func)()
     assert actual == expected

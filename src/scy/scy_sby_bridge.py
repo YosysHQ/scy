@@ -53,7 +53,7 @@ class SBYBridge:
 
     @property
     def options(self) -> list[str]:
-        return self.data.get("options")
+        return self.data.setdefault("options", [])
 
     @options.setter
     def options(self, contents: str | list[str]):
@@ -61,7 +61,7 @@ class SBYBridge:
 
     @property
     def script(self) -> list[str]:
-        return self.data.get("script")
+        return self.data.setdefault("script", [])
 
     @script.setter
     def script(self, contents: str | list[str]):
@@ -69,7 +69,7 @@ class SBYBridge:
 
     @property
     def files(self) -> list[str]:
-        return self.data.get("files")
+        return self.data.setdefault("files", [])
 
     @files.setter
     def files(self, contents: str | list[str]):
@@ -89,8 +89,8 @@ class SBYBridge:
             print("\n".join(body), file=sbyfile)
 
     def dump_common(self, sbyfile):
-        old_options = self.data.get("options")
-        options = old_options.copy()
+        old_options = self.data.get("options", ())
+        options = list(old_options)
         options.append("mode prep")
         self.options = options
         self.dump(sbyfile, skip_sections=["engines"])
@@ -112,8 +112,9 @@ class SBYBridge:
                 self.data.pop(key)
 
     def handle_error(
-        self, event_task: task_loop.Process, check_error: bool, failed_task: TaskTree
-    ) -> Exception | None:
+        self, event_task: task_loop.Process, check_error: bool, failed_task: TaskTree | None
+    ) -> Exception:
+        assert task_loop.LogContext.scope is not None
         task_loop.LogContext.scope += " SBY"
         event_cmd = " ".join(event_task.command)
         input_file = Path(event_task.command[-1])
@@ -141,6 +142,7 @@ class SBYBridge:
         for msg in summary:
             task_loop.log_warning(msg)
             if check_error and "unreached cover statements" in msg:
+                assert failed_task is not None
                 bestguess.append(f"unreached cover statement for {failed_task.name!r}")
 
         # check reported error
@@ -151,6 +153,7 @@ class SBYBridge:
             if check_error and "Shell command failed!" in msg:
                 bestguess.append("may be missing vcd2fst")
             if check_error and "selection contains 0 elements" in msg:
+                assert failed_task is not None
                 bestguess.append(f"missing cover property for {failed_task.name!r}")
 
         task_loop.LogContext.scope = task_loop.LogContext.scope[0:-4]
@@ -175,7 +178,7 @@ def parse_common_sby(common_task: TaskTree, sbycfg: SBYBridge, scycfg: SCYConfig
             if task.name not in ["assert", "assume", "live", "fair", "cover"]:
                 raise NotImplementedError(f"cell type {task.name!r} on line {task.line}")
             add_cells[task.line] = {"type": task.name}
-            add_cells[task.line].update(task.get_asgmt())
+            add_cells[task.line].update(task.get_asgmt() or {})
         elif task.stmt in ["enable", "disable"]:
             add_enable_cell(task.name, task.stmt)
         elif task.body:
@@ -214,11 +217,11 @@ def gen_sby(
     sbycfg: SBYBridge,
     scycfg: SCYConfig,
     add_cells: dict[int, dict[str, Any]],
-    enable_cells: dict[str, dict[str, str | bool]],
+    enable_cells: dict[str, dict[str, Any]],
 ):
     sbycfg = copy.deepcopy(sbycfg)
 
-    if not task.is_root and not task.parent.is_common:
+    if task.parent is not None and not task.parent.is_common:
         # child nodes depend on parent
         parent = task.parent
         parent_trace = os.path.join(

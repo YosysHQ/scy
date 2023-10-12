@@ -122,13 +122,13 @@ class SCYRunnerContext:
     sbycfg: SBYBridge
     scycfg: SCYConfig
     add_cells: dict[int, dict[str, Any]]
-    enable_cells: dict[str, dict[str, str | bool]]
+    enable_cells: dict[str, dict[str, Any]]
     task_steps: dict[str, int]
 
 
 @tl.task_context
 class SCYTaskContext:
-    task: TaskTree
+    task: TaskTree | None
     recurse: bool
 
 
@@ -141,7 +141,7 @@ async def handle_cover_output(lines):
             task_steps[step_match["task"]] = int(step_match["step"])
 
 
-def run_children(children: list[TaskTree], blocker: tl.Task):
+def run_children(children: list[TaskTree], blocker: tl.Task | None):
     for child in children:
         child_task = tl.Task(on_run=run_task)
         child_task[SCYTaskContext].task = child
@@ -168,6 +168,7 @@ def run_tree():
     scycfg = SCYRunnerContext.scycfg
     common_task = scycfg.root
     workdir = Path(SCYRunnerContext.scycfg.args.workdir)
+    enable_cells: dict[str, Any]
     try:
         (add_log, add_cells, enable_cells) = parse_common_sby(common_task, sbycfg, scycfg)
     except NotImplementedError as e:
@@ -194,7 +195,7 @@ def run_tree():
         design_task.depends_on(root_task)
         root_task = design_task
 
-    def parse_add_log():
+    def parse_add_log(add_log):
         # load back added cells
         with open(add_log, "r") as f:
             cell_dump = f.read()
@@ -223,7 +224,7 @@ def run_tree():
         common_task.update_children_enable_cells(recurse=False)
 
     if add_log:
-        parse_adds_task = tl.Task(on_run=parse_add_log)
+        parse_adds_task = tl.Task(on_run=lambda: parse_add_log(add_log))
         parse_adds_task.depends_on(root_task)
         root_task = parse_adds_task
 
@@ -240,6 +241,7 @@ def run_tree():
 def run_task():
     # loading context
     task = SCYTaskContext.task
+    assert task is not None
     workdir = Path(SCYRunnerContext.scycfg.args.workdir)
     setupmode = SCYRunnerContext.scycfg.args.setupmode
     LogContext.scope = task.full_line.strip(" \t:")
@@ -277,7 +279,7 @@ def run_task():
             log_exception(
                 SCYTreeError(task.children[0].stmt, "trace statement does not support children")
             )
-        if task.is_root or task.parent.is_common:
+        if task.parent is None or task.parent.is_common:
             log_exception(SCYTreeError(task.full_line, "trace statement cannot be root task"))
         if not SCYRunnerContext.sbycfg.files:
             log_exception(SCYTreeError(task.full_line, "trace requires common sby generation"))
@@ -289,7 +291,7 @@ def run_task():
             log_exception(
                 SCYTreeError(task.stmt, "replay_vcd option incompatible with append statement")
             )
-        if task.is_root or task.parent.is_common:
+        if task.parent is None or task.parent.is_common:
             log_exception(SCYTreeError(task.full_line, "append statement cannot be root task"))
         try:
             task.traces[-1] += f" -append {int(task.name):d}"

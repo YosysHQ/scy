@@ -201,6 +201,7 @@ def test_tree_respects_setup(scycfg: SCYConfig):
 def test_run_task(scytr_upcnt: TaskRunner):
     scytr_upcnt.sbycfg.options.append("mode cover")
     root_task = scytr_upcnt.scycfg.sequence[0]
+    assert isinstance(root_task, TaskTree)
     scytr_upcnt.run_task_loop(root_task, recurse=False)
 
 
@@ -212,9 +213,11 @@ def test_run_task_nomode(scytr_upcnt: TaskRunner):
         pass
     root_task = scytr_upcnt.scycfg.sequence[0]
     if scytr_upcnt.scycfg.args.setupmode:
+        assert isinstance(root_task, TaskTree)
         scytr_upcnt.run_task_loop(root_task, recurse=False)
     else:
         with pytest.raises(tl.TaskFailed):
+            assert isinstance(root_task, TaskTree)
             scytr_upcnt.run_task_loop(root_task, recurse=False)
 
 
@@ -257,7 +260,9 @@ def test_tr_with_stmt(scytr_upcnt: TaskRunner, task: TaskTree, e_type: type, e_s
     ],
 )
 def test_appended_task(scytr_upcnt: TaskRunner, task: TaskTree, e_type: type, e_str: str):
-    scytr_upcnt.scycfg.sequence[-1].add_child(task)
+    task_tree = scytr_upcnt.scycfg.sequence[-1]
+    assert isinstance(task_tree, TaskTree)
+    task_tree.add_child(task)
     with pytest.raises(SCYTreeError) as exc_info:
         run_task_loop_with_errors(scytr_upcnt, task)
     assert isinstance(exc_info.value, e_type), f"expected {e_type}, got {exc_info.type}"
@@ -301,6 +306,8 @@ def run_tree_loop_with_errors(scytr_upcnt: TaskRunner):
     indirect=["scycfg"],
 )
 def test_tree_with_appended(scytr_upcnt_with_common: TaskRunner, task: TaskTree, expectation):
-    scytr_upcnt_with_common.scycfg.sequence[-1].add_child(task)
+    task_tree = scytr_upcnt_with_common.scycfg.sequence[-1]
+    assert isinstance(task_tree, TaskTree)
+    task_tree.add_child(task)
     with expectation:
         run_tree_loop_with_errors(scytr_upcnt_with_common)

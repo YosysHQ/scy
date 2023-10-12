@@ -231,7 +231,7 @@ class TestComplexClass:
         scy_exec.check_returncode()
 
     @pytest.mark.usefixtures("scy_exec")
-    def test_files(self, test: dict[str, str | list[str]], scy_dir: Path, output_dir: Path):
+    def test_files(self, test: dict[str, Any], scy_dir: Path, output_dir: Path):
         assert test["name"] in scy_dir.name
         if "sequence" in test:
             # get all output files for cover and trace statements
@@ -256,11 +256,11 @@ class TestComplexClass:
                 for file in output_files:
                     if match_str in file:
                         found_match = True
+                        output_files.remove(file)
                         break
                 assert (
                     found_match
                 ), f"{match_str} not found in {output_files} for test {test['name']!r}"
-                output_files.remove(file)
 
             # check unmatched files
             output_files.remove("common.sby")
@@ -534,7 +534,9 @@ class TestSBYGenClass:
             for setattr in sby_setattrs:
                 if "%ci:+[EN]" in setattr:  # enable cell
                     continue
-                name = re.search(r" w:(\S*) ", setattr).group(1)
+                match = re.search(r" w:(\S*) ", setattr)
+                assert match is not None
+                name = match.group(1)
                 if name in cell:
                     found = True
                     break
@@ -546,7 +548,9 @@ class TestSBYGenClass:
             for setattr in sby_setattrs:
                 if "%ci:+[EN]" not in setattr:  # add cell
                     continue
-                name = re.search(r" c:(\S*) ", setattr).group(1)
+                match = re.search(r" c:(\S*) ", setattr)
+                assert match is not None
+                name = match.group(1)
                 if name in cell:
                     found = True
                     break

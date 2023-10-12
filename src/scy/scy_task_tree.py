@@ -28,16 +28,21 @@ def from_string(string: SourceStr | str, L0: int = 0, depth: int = 0):
             tree_list.append(tree_str)
             continue
 
+        stmt = d["stmt"]
+        assert stmt is not None
+        name = d["name"]
+        assert name is not None
+
         # if we're dealing with a source_str we can get the source line directly from it
-        source_map = source_str.source_map(d["stmt"])
+        source_map = source_str.source_map(stmt)
         span = source_map.spans[0]
         start_line, _ = span.file.text_position(span.file_start)
         line = start_line
 
         # otherwise continue recursively
         root = TaskTree(
-            name=d["name"],
-            stmt=d["stmt"],
+            name=name,
+            stmt=stmt,
             line=line,
             depth=depth,
             asgmt=d.get("asgmt", None),
@@ -52,7 +57,7 @@ def from_string(string: SourceStr | str, L0: int = 0, depth: int = 0):
     return tree_list
 
 
-def make_common(children: list[TaskTree | str] = None):
+def make_common(children: list[TaskTree | str] | None = None):
     return TaskTree("", "common", 0, children=children)
 
 
@@ -62,14 +67,15 @@ class TaskTree:
         name: str,
         stmt: str,
         line: int,
+        *,
         steps: int = 0,
         depth: int = 0,
-        parent: TaskTree = None,
-        children: list[TaskTree | str] = None,
+        parent: TaskTree | None = None,
+        children: list[TaskTree | str] | None = None,
         body: str = "",
-        asgmt: str = None,
-        full_line: SourceStr = None,
-        enable_cells: dict[str, dict[str, str]] = None,
+        asgmt: str | None = None,
+        full_line: str | None = None,
+        enable_cells: dict[str, dict[str, str]] | None = None,
     ):
         self.name = name
         self.stmt = stmt
@@ -77,7 +83,7 @@ class TaskTree:
         self.steps = steps
         self.depth = depth
         self.parent = parent
-        self.children: list[TaskTree | str] = []
+        self.children: list[TaskTree] = []
         self.body = body
         if children:
             self.add_children(children)
@@ -124,6 +130,7 @@ class TaskTree:
             self.add_enable_cell(name, cell)
 
     def update_enable_cells_from_parent(self, recurse=False):
+        assert self.parent is not None
         for k, v in self.parent.enable_cells.items():
             try:
                 self.enable_cells[k].update(v)
@@ -132,7 +139,7 @@ class TaskTree:
         if recurse:
             self.update_children_enable_cells(recurse)
 
-    def update_children_traces(self, task_trace: str):
+    def update_children_traces(self, task_trace: str | None):
         for child in self.children:
             child.traces.extend(self.traces)
             if task_trace:
@@ -177,15 +184,16 @@ class TaskTree:
         elif self.uses_sby:
             return f"trace{self.line:03d}"
         else:
+            assert self.parent is not None
             return self.parent.tracestr
 
     @property
     def linestr(self) -> str:
-        return f"L{self.line:03d}_{0 if self.is_root else self.parent.line:03d}"
+        return f"L{self.line:03d}_{0 if self.parent is None else self.parent.line:03d}"
 
     def get_all_linestr(self) -> list[str]:
         linestr = [f"L{self.line:03d}"]
-        if self.is_root:
+        if self.parent is None:
             return linestr
         else:
             return linestr + self.parent.get_all_linestr()
@@ -201,6 +209,7 @@ class TaskTree:
         if self.makes_dir:
             return self.dir
         else:
+            assert self.parent is not None
             return self.parent.get_dir()
 
     def get_asgmt(self):
@@ -211,7 +220,7 @@ class TaskTree:
 
     @property
     def start_cycle(self) -> int:
-        if self.is_root:
+        if self.parent is None:
             return 0
         else:
             return self.parent.stop_cycle

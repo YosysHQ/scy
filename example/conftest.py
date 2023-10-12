@@ -23,9 +23,8 @@ def scy_chunks(scy_exec: subprocess.CompletedProcess):
     scy_out = str(scy_exec.stdout, encoding="utf-8")
     regex = r"Chunks:\n(.*)"
     match = re.search(regex, scy_out, re.DOTALL)
-    try:
-        chunk_str = match.group()
-    except AttributeError:
+    if match is None:
         return []
+    chunk_str = match.group()
     chunk_regex = r"(\d+)  \S+$"
     return [int(x) for x in re.findall(chunk_regex, chunk_str, re.MULTILINE)]

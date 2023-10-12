@@ -20,7 +20,7 @@ LogContext.app_name = "SCY"
 
 
 class SCYTask:
-    def __init__(self, args: argparse.Namespace | None = None):
+    def __init__(self, args: argparse.Namespace):
         self.args = args
         self.localdir = False
         self.failed_tree = None
@@ -56,7 +56,7 @@ class SCYTask:
             sbycfg.fix_relative_paths("..")
         else:
             scy_path = Path(self.args.scyfile).absolute().parent
-            sbycfg.fix_relative_paths(scy_path)
+            sbycfg.fix_relative_paths(str(scy_path))
         with tl.root_task().as_current_task():
             SCYRunnerContext.sbycfg = sbycfg
             SCYRunnerContext.task_steps = {}
@@ -74,7 +74,7 @@ class SCYTask:
                 trace_tasks.append(task)
             if task.stmt not in ["append", "cover"]:
                 continue
-            task.steps = SCYRunnerContext.task_steps.get(f"{task.linestr}_{task.name}")
+            task.steps = SCYRunnerContext.task_steps.get(f"{task.linestr}_{task.name}", 0)
             if task.steps:
                 steps_str = f"{task.steps:2}"
                 cycles_str = f"{task.start_cycle:2} .. {task.stop_cycle:2}"
@@ -93,6 +93,7 @@ class SCYTask:
         for task in trace_tasks:
             try:
                 cycles_str = f"{task.stop_cycle + 1} cycles"
+                assert task.parent is not None
                 chunks = task.parent.get_all_linestr()
                 chunks.sort()
                 chunks_str = " ".join(chunks)
@@ -105,7 +106,11 @@ class SCYTask:
         while isinstance(exc.__cause__, tl.ChildFailed):
             exc = exc.__cause__
 
-        if isinstance(exc, tl.ChildFailed) and isinstance(exc.__cause__.__cause__, SBYException):
+        if (
+            isinstance(exc, tl.ChildFailed)
+            and exc.__cause__ is not None
+            and isinstance(exc.__cause__.__cause__, SBYException)
+        ):
             self.failed_tree = exc.task[SCYTaskContext].task
         else:
             tl.log_exception(exc, raise_error=True)
@@ -163,10 +168,13 @@ class SCYTask:
 
         if SCYRunnerContext.scycfg.args.trace_final:
             final_trace = TaskTree.from_string("trace __final")[0]
+            assert isinstance(final_trace, TaskTree)
             if tree_task.state == "failed":
+                assert self.failed_tree is not None
                 # add trace to recovered task
                 tl.LogContext.scope = "final trace"
                 final_task = self.failed_tree.parent
+                assert final_task is not None
                 tl.log_warning(
                     "dumping trace from last successful task "
                     f"{final_task.linestr!r} to '__final.vcd'"

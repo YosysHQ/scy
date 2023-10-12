@@ -112,6 +112,9 @@ class SCYOptions(ConfigOptions):
 class SCYConfig(ConfigParser):
     options = OptionsSection(SCYOptions)
 
+    args: argparse.Namespace
+    root: TaskTree
+
     @postprocess_section(StrSection())
     def sequence(self, sequence: str) -> list[TaskTree | str]:
         # give a warning if whitespace mixes spaces and tabs
@@ -135,5 +138,3 @@ class SCYConfig(ConfigParser):
 
     def __init__(self, contents: str) -> None:
         super().__init__(contents)
-        self.args: argparse.Namespace = None
-        self.root: TaskTree = None
