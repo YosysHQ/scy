@@ -26,7 +26,7 @@ from scy.scy_sby_bridge import (
     gen_sby,
     parse_common_sby,
 )
-from scy.scy_task_tree import TaskTree
+from scy.scy_task_tree import TaskCell, TaskTree
 
 
 def gen_traces(task: TaskTree) -> list[str]:
@@ -121,8 +121,8 @@ async def on_proc_exit(event: tl.process.ExitEvent):
 class SCYRunnerContext:
     sbycfg: SBYBridge
     scycfg: SCYConfig
-    add_cells: dict[int, dict[str, Any]]
-    enable_cells: dict[str, dict[str, Any]]
+    add_cells: dict[int, dict[str, str]]
+    enable_cells: dict[str, TaskCell]
     task_steps: dict[str, int]
 
 
@@ -168,7 +168,6 @@ def run_tree():
     scycfg = SCYRunnerContext.scycfg
     common_task = scycfg.root
     workdir = Path(SCYRunnerContext.scycfg.args.workdir)
-    enable_cells: dict[str, Any]
     try:
         (add_log, add_cells, enable_cells) = parse_common_sby(common_task, sbycfg, scycfg)
     except NotImplementedError as e:
@@ -204,23 +203,24 @@ def run_tree():
             for cell_m in re.finditer(cell_regex, cell_dump):
                 property_regex = r"  .. (?P<pty>[^:]+?)(?::(?P<name>.+?))?=(?P<val>.*) .."
                 cell = cell_m.group("cell")
+                assert isinstance(cell, str)
                 for m in re.finditer(property_regex, cell_m.group("body")):
                     d = m.groupdict()
                     if d["pty"] == "hdlname":
-                        enable_cells[d["name"]]["enable"] = cell
+                        enable_cells[d["name"]].enable = cell
                     elif d["pty"] == "scy_line":
                         line = int(d["val"], base=2)
                         if line:
                             add_cells[line]["cell"] = cell
 
-        for name, vals in enable_cells.items():
-            task_cell = enable_cells[name].copy()
-            if not vals.get("does_enable", False):
-                task_cell["status"] = "enable"
-                common_task.add_enable_cell(name, task_cell)
-            elif not vals.get("does_disable", False):
-                task_cell["status"] = "disable"
-                common_task.add_enable_cell(name, task_cell)
+        for name, parent_cell in enable_cells.items():
+            child_cell = parent_cell.copy()
+            if not parent_cell.does_enable:
+                child_cell.status = "enable"
+                common_task.add_enable_cell(name, child_cell)
+            elif not parent_cell.does_disable:
+                child_cell.status = "disable"
+                common_task.add_enable_cell(name, child_cell)
 
         common_task.update_children_enable_cells(recurse=False)
 
@@ -309,7 +309,9 @@ def run_task():
         except KeyError:
             log_exception(SCYUnknownCellError(task.full_line, "attempted to add unknown cell"))
             assert False
-        task.add_enable_cell(add_cell["cell"], add_cell)
+        task_cell = TaskCell()
+        task_cell.update(add_cell)
+        task.add_enable_cell(add_cell["cell"], task_cell)
         task.reduce_depth()
     elif task.stmt in ["enable", "disable"]:
         try:
@@ -319,8 +321,8 @@ def run_task():
                 SCYUnknownCellError(task.full_line, f"attempted to {task.stmt} unknown cell")
             )
             assert False
-        task_cell["status"] = task.stmt
-        task_cell["line"] = task.line
+        task_cell.status = task.stmt
+        task_cell.line = task.line
         task.add_or_update_enable_cell(task.name, task_cell)
     else:
         # this shouldn't happen since an unrecognised statement should have been caught

@@ -4,7 +4,7 @@ from textwrap import dedent
 from typing import Any
 
 import pytest
-from scy.scy_task_tree import TaskTree
+from scy.scy_task_tree import TaskCell, TaskTree
 
 
 def first_tree_from_string(input_str: str) -> TaskTree | str:
@@ -232,7 +232,7 @@ def test_mixed_spacing(mixed_spacing_input, mixed_spacing_tree):
 def enable_tree():
     a = TaskTree("a", "cover", 0)
     b = TaskTree("cell", "enable", 1, asgmt="b")
-    c = TaskTree("c", "cover", 2, enable_cells={"b": {"lhs": "0"}})
+    c = TaskTree("c", "cover", 2, enable_cells={"b": TaskCell()})
     d = TaskTree("d", "cover", 3, body="enable e\n")
     a.add_child(b.add_child(c)).add_child(d)
     return a
@@ -243,7 +243,7 @@ def test_enable_tree_len(enable_tree):
     assert tree_lens == [0, 0, 1, 0]
 
 
-@pytest.fixture(params=[("test", {"val": "zero"}), ("b", {"rhs": "test"})])
+@pytest.fixture(params=[("test", {"val": "zero"}), ("b", {"status": "test"})])
 def enable_tree_with_cell(request, enable_tree: TaskTree):
     name, cell = request.param
     enable_tree.add_or_update_enable_cell(name, cell)

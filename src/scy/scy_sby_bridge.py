@@ -10,7 +10,7 @@ from yosys_mau import task_loop
 
 from scy.scy_config_parser import SCYConfig
 from scy.scy_exceptions import SCYSubProcessException
-from scy.scy_task_tree import TaskTree
+from scy.scy_task_tree import TaskCell, TaskTree
 
 
 class SBYException(SCYSubProcessException):
@@ -166,12 +166,18 @@ def parse_common_sby(common_task: TaskTree, sbycfg: SBYBridge, scycfg: SCYConfig
     assert common_task.is_common, "expected tree root to be common.sby generation"
 
     # preparse tree to extract cell generation
-    add_cells: dict[int, dict[str, Any]] = {}
-    enable_cells: dict[str, dict[str, str | bool]] = {}
+    add_cells: dict[int, dict[str, str]] = {}
+    enable_cells: dict[str, TaskCell] = {}
 
     def add_enable_cell(hdlname: str, stmt: str):
-        enable_cells.setdefault(hdlname, {"disable": "1'b0"})
-        enable_cells[hdlname][f"does_{stmt}"] = True
+        if stmt == "enable":
+            enable_cell = TaskCell(does_enable=True)
+        else:
+            enable_cell = TaskCell(does_disable=True)
+        try:
+            enable_cells[hdlname].update(enable_cell)
+        except KeyError:
+            enable_cells[hdlname] = enable_cell
 
     for task in common_task.traverse():
         if task.stmt == "add":
@@ -216,8 +222,8 @@ def gen_sby(
     task: TaskTree,
     sbycfg: SBYBridge,
     scycfg: SCYConfig,
-    add_cells: dict[int, dict[str, Any]],
-    enable_cells: dict[str, dict[str, Any]],
+    add_cells: dict[int, dict[str, str]],
+    enable_cells: dict[str, TaskCell],
 ):
     sbycfg = copy.deepcopy(sbycfg)
 
@@ -246,12 +252,11 @@ def gen_sby(
             for line in task.body.split("\n"):
                 if hdlname in line:
                     task_cell = enable_cells[hdlname].copy()
-                    task_cell["status"] = line.split()[0]
+                    task_cell.status = line.split()[0]
                     break
         if task_cell:
-            status = task_cell["status"]
-            pre_sim_commands.append(f"connect -port {hdlname} \\EN {task_cell[status]}")
-            if status == "enable":
+            pre_sim_commands.append(f"connect -port {hdlname} \\EN {task_cell.setting}")
+            if task_cell.status == "enable":
                 post_sim_commands.append(f"chformal -skip 1 c:{hdlname}")
     sbycfg.script.extend(pre_sim_commands)
 

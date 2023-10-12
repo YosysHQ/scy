@@ -1,4 +1,5 @@
 from __future__ import annotations
+from dataclasses import dataclass
 
 from typing import Iterable
 
@@ -75,7 +76,7 @@ class TaskTree:
         body: str = "",
         asgmt: str | None = None,
         full_line: str | None = None,
-        enable_cells: dict[str, dict[str, str]] | None = None,
+        enable_cells: dict[str, TaskCell] | None = None,
     ):
         self.name = name
         self.stmt = stmt
@@ -120,10 +121,10 @@ class TaskTree:
         child.reduce_depth(-1)
         return self
 
-    def add_enable_cell(self, name: str, cell: dict[str, str]):
+    def add_enable_cell(self, name: str, cell: TaskCell):
         self.enable_cells[name] = cell
 
-    def add_or_update_enable_cell(self, name: str, cell: dict[str, str]):
+    def add_or_update_enable_cell(self, name: str, cell: TaskCell):
         try:
             self.enable_cells[name].update(cell)
         except KeyError:
@@ -132,10 +133,9 @@ class TaskTree:
     def update_enable_cells_from_parent(self, recurse=False):
         assert self.parent is not None
         for k, v in self.parent.enable_cells.items():
-            try:
-                self.enable_cells[k].update(v)
-            except KeyError:
-                self.enable_cells[k] = v.copy()
+            if k not in self.enable_cells:
+                self.enable_cells[k] = TaskCell()
+            self.enable_cells[k].update(v)
         if recurse:
             self.update_children_enable_cells(recurse)
 
@@ -266,3 +266,31 @@ class TaskTree:
 
     from_string = staticmethod(from_string)
     make_common = staticmethod(make_common)
+
+@dataclass
+class TaskCell:
+    status: str = "disable"
+    disable: str = "1'b0"
+    enable: str | None = None
+    line: int | None = None
+    wire: str | None = None
+    does_disable: bool = False
+    does_enable: bool = False
+
+    def update(self, other: object):
+        if isinstance(other, dict):
+            other_dict = other
+        else:
+            other_dict = other.__dict__
+        for k, v in other_dict.items():
+            if v and k in self.__dict__:
+                self.__dict__[k] = v
+
+    def copy(self):
+        other = TaskCell()
+        other.update(self)
+        return other
+
+    @property
+    def setting(self):
+        return self.__dict__[self.status]

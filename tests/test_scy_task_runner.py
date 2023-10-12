@@ -3,7 +3,6 @@ from __future__ import annotations
 import pathlib
 from contextlib import nullcontext as does_not_raise
 from textwrap import dedent
-from typing import Any
 
 import pytest
 import scy.scy_task_runner as scytr
@@ -16,15 +15,15 @@ from scy.scy_exceptions import (
     SCYValueError,
 )
 from scy.scy_sby_bridge import SBYBridge
-from scy.scy_task_tree import TaskTree
+from scy.scy_task_tree import TaskCell, TaskTree
 
 
 class TaskRunner:
     def __init__(self, sbycfg: SBYBridge, scycfg: SCYConfig):
         self.sbycfg = sbycfg
         self.scycfg = scycfg
-        self.add_cells: dict[int, dict[str, Any]] = {}
-        self.enable_cells: dict[str, dict[str, str | bool]] = {}
+        self.add_cells: dict[int, dict[str, str]] = {}
+        self.enable_cells: dict[str, TaskCell] = {}
         self.task_steps: dict[str, int] = {}
 
     def _prep_loop(self, recurse: bool):
