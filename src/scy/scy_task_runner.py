@@ -173,6 +173,7 @@ def run_tree():
         (add_log, add_cells, enable_cells) = parse_common_sby(common_task, sbycfg, scycfg)
     except NotImplementedError as e:
         log_exception(e)
+        assert False
 
     # use sby to prepare input
     log("preparing input files")
@@ -307,6 +308,7 @@ def run_task():
             add_cell = SCYRunnerContext.add_cells[task.line]
         except KeyError:
             log_exception(SCYUnknownCellError(task.full_line, "attempted to add unknown cell"))
+            assert False
         task.add_enable_cell(add_cell["cell"], add_cell)
         task.reduce_depth()
     elif task.stmt in ["enable", "disable"]:
@@ -316,6 +318,7 @@ def run_task():
             log_exception(
                 SCYUnknownCellError(task.full_line, f"attempted to {task.stmt} unknown cell")
             )
+            assert False
         task_cell["status"] = task.stmt
         task_cell["line"] = task.line
         task.add_or_update_enable_cell(task.name, task_cell)
