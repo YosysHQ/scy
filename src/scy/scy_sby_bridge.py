@@ -4,7 +4,6 @@ import copy
 import os
 import re
 from pathlib import Path
-from typing import Any
 
 from yosys_mau import task_loop
 

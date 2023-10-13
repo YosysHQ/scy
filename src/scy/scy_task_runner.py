@@ -4,7 +4,7 @@ import json
 import os
 import re
 from pathlib import Path
-from typing import Any, cast
+from typing import cast
 
 import yosys_mau.task_loop as tl
 from yosys_mau.task_loop import (
