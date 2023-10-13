@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import os
 import re
+from io import TextIOWrapper
 from pathlib import Path
 
 from yosys_mau import task_loop
@@ -13,7 +14,9 @@ from scy.scy_task_tree import TaskCell, TaskTree
 
 
 class SBYException(SCYSubProcessException):
-    def __init__(self, command: str, logfile=None, bestguess=None, typ: str = "UNKNOWN") -> None:
+    def __init__(
+        self, command: str, logfile: Path | None = None, bestguess: str = "", typ: str = "UNKNOWN"
+    ) -> None:
         super().__init__(command, logfile, bestguess)
         self.typ = typ
 
@@ -38,7 +41,7 @@ def from_scycfg(scycfg: SCYConfig):
 
 class SBYBridge:
     def __init__(self, data: dict[str, list[str]] = {}):
-        self.data = {}
+        self.data: dict[str, list[str]] = {}
         for name, contents in data.items():
             self.add_section(name, contents)
 
@@ -80,14 +83,14 @@ class SBYBridge:
                 if s and not os.path.isabs(s):
                     self.files[i] = os.path.join(dir_prepend, s)
 
-    def dump(self, sbyfile, skip_sections: list[str] = []):
+    def dump(self, sbyfile: TextIOWrapper, skip_sections: list[str] = []):
         for name, body in self.data.items():
             if name in skip_sections:
                 continue
             print(f"[{name}]", file=sbyfile)
             print("\n".join(body), file=sbyfile)
 
-    def dump_common(self, sbyfile):
+    def dump_common(self, sbyfile: TextIOWrapper):
         old_options = self.data.get("options", ())
         options = list(old_options)
         options.append("mode prep")
@@ -120,7 +123,7 @@ class SBYBridge:
         event_dir = Path(event_task.cwd)
         logfile: Path = event_dir / input_file.stem / "logfile.txt"
         return_code = event_task.returncode
-        bestguess = []
+        bestguess: list[str] = []
 
         if return_code == 2:
             typ = "FAIL"
@@ -156,7 +159,7 @@ class SBYBridge:
                 bestguess.append(f"missing cover property for {failed_task.name!r}")
 
         task_loop.LogContext.scope = task_loop.LogContext.scope[0:-4]
-        return SBYException(event_cmd, logfile, bestguess, typ)
+        return SBYException(event_cmd, logfile, str(bestguess), typ)
 
     from_scycfg = staticmethod(from_scycfg)
 
@@ -240,8 +243,8 @@ def gen_sby(
         )
 
     # configure additional cells
-    pre_sim_commands = []
-    post_sim_commands = []
+    pre_sim_commands: list[str] = []
+    post_sim_commands: list[str] = []
     for cell in add_cells.values():
         en_sig = "1" if cell["cell"] in task.enable_cells else "0"
         pre_sim_commands.append(f"connect -port {cell['cell']} \\EN 1'b{en_sig}")
@@ -260,7 +263,7 @@ def gen_sby(
     sbycfg.script.extend(pre_sim_commands)
 
     # replay prior traces and enable only relevant cover
-    traces_script = []
+    traces_script: list[str] = []
     for trace in task.traces:
         if scycfg.options.replay_vcd:
             trace_scope = f" -scope {scycfg.options.design_scope}"

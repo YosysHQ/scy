@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from yosys_mau.source_str.report import InputError
 
 
@@ -36,7 +38,7 @@ class SCYMissingTraceException(SCYTreeError):
 class SCYSubProcessException(Exception):
     """Exception for a failed sub-process"""
 
-    def __init__(self, command: str, logfile=None, bestguess=None) -> None:
+    def __init__(self, command: str, logfile: Path | None = None, bestguess: str = "") -> None:
         self.command = command
         self.logfile = logfile
         self.bestguess = bestguess

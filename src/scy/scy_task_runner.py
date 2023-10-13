@@ -9,8 +9,10 @@ from typing import cast
 import yosys_mau.task_loop as tl
 from yosys_mau.task_loop import (
     LogContext,
+    TaskEventStream,
     log,
     log_exception,
+    process,
 )
 
 from scy.scy_config_parser import SCYConfig
@@ -32,7 +34,7 @@ from scy.scy_task_tree import TaskCell, TaskTree
 def gen_traces(task: TaskTree) -> list[str]:
     # reversing trace order means that the most recent trace will be first
     task.traces.reverse()
-    traces = []
+    traces: list[str] = []
     last_trace = True
     for trace in task.traces:
         split_trace = trace.split(maxsplit=1)
@@ -107,7 +109,7 @@ async def on_proc_exit(event: tl.process.ExitEvent):
             event_cmd = " ".join(event_task.command)
 
             # check reported error
-            bestguess = None
+            bestguess = ""
             if SCYRunnerContext.scycfg.args.check_error:
                 if "yosys-witness" in exe_name:
                     bestguess = "may be missing yw_join feature"
@@ -132,7 +134,7 @@ class SCYTaskContext:
     recurse: bool
 
 
-async def handle_cover_output(lines):
+async def handle_cover_output(lines: TaskEventStream[process.OutputEvent]):
     steps_regex = r"^.*\[(?P<task>.*)\].*(?:reached).*step (?P<step>\d+)$"
     async for line_event in lines:
         step_match = re.match(steps_regex, line_event.output)
@@ -195,7 +197,7 @@ def run_tree():
         design_task.depends_on(root_task)
         root_task = design_task
 
-    def parse_add_log(add_log):
+    def parse_add_log(add_log: Path):
         # load back added cells
         with open(add_log, "r") as f:
             cell_dump = f.read()

@@ -1,6 +1,6 @@
 from __future__ import annotations
-from dataclasses import dataclass
 
+from dataclasses import dataclass
 from typing import Iterable
 
 from yosys_mau import source_str
@@ -88,7 +88,7 @@ class TaskTree:
         self.body = body
         if children:
             self.add_children(children)
-        self.traces = []
+        self.traces: list[str] = []
         self.asgmt = asgmt
         if enable_cells:
             self.enable_cells = enable_cells
@@ -101,13 +101,13 @@ class TaskTree:
 
     def add_children(self, children: list[TaskTree | str]):
         for child in children:
-            if isinstance(child, str):
+            if isinstance(child, TaskTree):
+                self.add_child(child)
+            else:
                 if self.body:
                     self.body = "\n".join([self.body, child])
                 else:
                     self.body = child
-            elif isinstance(child, TaskTree):
-                self.add_child(child)
         return self
 
     def add_child(self, child: TaskTree):
@@ -130,7 +130,7 @@ class TaskTree:
         except KeyError:
             self.add_enable_cell(name, cell)
 
-    def update_enable_cells_from_parent(self, recurse=False):
+    def update_enable_cells_from_parent(self, recurse: bool = False):
         assert self.parent is not None
         for k, v in self.parent.enable_cells.items():
             if k not in self.enable_cells:
@@ -145,7 +145,7 @@ class TaskTree:
             if task_trace:
                 child.traces.append(task_trace)
 
-    def update_children_enable_cells(self, recurse=False):
+    def update_children_enable_cells(self, recurse: bool = False):
         for child in self.children:
             child.update_enable_cells_from_parent(recurse)
 
@@ -235,14 +235,14 @@ class TaskTree:
         for child in self.children:
             child.reduce_depth(amount)
 
-    def traverse(self, include_self=True) -> Iterable[TaskTree]:
+    def traverse(self, include_self: bool = True) -> Iterable[TaskTree]:
         if include_self:
             yield self
         for child in self.children:
             for task in child.traverse():
                 yield task
 
-    def as_str(self, recurse=False) -> str:
+    def as_str(self, recurse: bool = False) -> str:
         strings: list[str] = [f"{self.linestr} => {self.stmt} {self.name}"]
         if self.asgmt:
             strings[0] += f" ({self.asgmt})"
@@ -267,6 +267,7 @@ class TaskTree:
     from_string = staticmethod(from_string)
     make_common = staticmethod(make_common)
 
+
 @dataclass
 class TaskCell:
     status: str = "disable"
@@ -277,11 +278,11 @@ class TaskCell:
     does_disable: bool = False
     does_enable: bool = False
 
-    def update(self, other: object):
-        if isinstance(other, dict):
-            other_dict = other
-        else:
+    def update(self, other: TaskCell | dict[str, str]):
+        if isinstance(other, TaskCell):
             other_dict = other.__dict__
+        else:
+            other_dict = other
         for k, v in other_dict.items():
             if v and k in self.__dict__:
                 self.__dict__[k] = v
