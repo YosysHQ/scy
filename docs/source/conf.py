@@ -62,6 +62,6 @@ def setup(sphinx):
     sys.path += [os.path.dirname(__file__) + "/../util"]
     from YoscryptLexer import YoscryptLexer
     sphinx.add_lexer("yoscrypt", YoscryptLexer)
-    
+
     from SCYLexer import SCYLexer
     sphinx.add_lexer("scy", SCYLexer)

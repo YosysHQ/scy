@@ -11,4 +11,3 @@ narrow the search space to certain traces.
 ## Note on installation
 
 Requires YosysHQ/Yosys#3903.
-

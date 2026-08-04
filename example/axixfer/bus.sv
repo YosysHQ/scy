@@ -25,7 +25,7 @@ module bus (
 	output		CPU1_ARREADY,
 	input	[31:0]	CPU1_ARADDR,
 
-	// CPU1 AXI4-Lite Read Data Channel 
+	// CPU1 AXI4-Lite Read Data Channel
 	output		CPU1_RVALID,
 	input		CPU1_RREADY,
 	output	[31:0]	CPU1_RDATA,
@@ -52,7 +52,7 @@ module bus (
 	output		CPU2_ARREADY,
 	input	[31:0]	CPU2_ARADDR,
 
-	// CPU2 AXI4-Lite Read Data Channel 
+	// CPU2 AXI4-Lite Read Data Channel
 	output		CPU2_RVALID,
 	input		CPU2_RREADY,
 	output	[31:0]	CPU2_RDATA,
@@ -79,7 +79,7 @@ module bus (
 	input		MEM_ARREADY,
 	output	[31:0]	MEM_ARADDR,
 
-	// Memory AXI4-Lite Read Data Channel 
+	// Memory AXI4-Lite Read Data Channel
 	input		MEM_RVALID,
 	output		MEM_RREADY,
 	input	[31:0]	MEM_RDATA

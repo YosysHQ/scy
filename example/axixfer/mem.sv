@@ -23,7 +23,7 @@ module mem (
 	output		ARREADY,
 	input	[31:0]	ARADDR,
 
-	// AXI4-Lite Read Data Channel 
+	// AXI4-Lite Read Data Channel
 	output		RVALID,
 	input		RREADY,
 	output	[31:0]	RDATA

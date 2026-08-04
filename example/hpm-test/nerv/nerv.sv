@@ -240,7 +240,7 @@
 	`NERV_CSR_ARR_MRW(hpm_counterh, 28, mhpmcounter28h,  12'h B9C)			\
 	`NERV_CSR_ARR_MRW(hpm_counterh, 29, mhpmcounter29h,  12'h B9D)			\
 	`NERV_CSR_ARR_MRW(hpm_counterh, 30, mhpmcounter30h,  12'h B9E)			\
-	`NERV_CSR_ARR_MRW(hpm_counterh, 31, mhpmcounter31h,  12'h B9F)		
+	`NERV_CSR_ARR_MRW(hpm_counterh, 31, mhpmcounter31h,  12'h B9F)
 
 `define NERV_COUNTER_SETUP_CSRS /* Machine Counter Setup CSRs */			\
 	/* mcountinhibit is optional */							\
@@ -278,7 +278,7 @@
 	`NERV_CSR_ARR_MRW(hpm_event, 29, mhpmevent29,        12'h 33D)			\
 	`NERV_CSR_ARR_MRW(hpm_event, 30, mhpmevent30,        12'h 33E)			\
 	`NERV_CSR_ARR_MRW(hpm_event, 31, mhpmevent31,        12'h 33F)
- 
+
 `define NERV_CUSTOM_CSRS /* Custom CSR for testing */					\
 	`NERV_CSR_REG_MRW(custom,            12'h BC0, 32'h 0000_0000)			\
 	`NERV_CSR_VAL_MRO(custom_ro,         12'h FC0, 32'h dead_beef)
@@ -758,7 +758,7 @@ module nerv #(
 					hpm_increment = 0;
 				end
 			endcase
-			{csr_hpm_counterh_next[(hpm_idx)*32 +: 32], csr_hpm_counter_next[(hpm_idx)*32 +: 32]} = 
+			{csr_hpm_counterh_next[(hpm_idx)*32 +: 32], csr_hpm_counter_next[(hpm_idx)*32 +: 32]} =
 				{csr_hpm_counterh_next[(hpm_idx)*32 +: 32], csr_hpm_counter_next[(hpm_idx)*32 +: 32]} + hpm_increment;
 		end
 

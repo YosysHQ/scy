@@ -23,7 +23,7 @@ module cpu (
 	input		ARREADY,
 	output	[31:0]	ARADDR,
 
-	// AXI4-Lite Read Data Channel 
+	// AXI4-Lite Read Data Channel
 	input		RVALID,
 	output		RREADY,
 	input	[31:0]	RDATA
